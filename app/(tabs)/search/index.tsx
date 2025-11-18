@@ -24,7 +24,6 @@ export default function SearchScreen() {
   const { searchState, updateSearchState, addToWatchlist, watchlist } = useApp();
   const router = useRouter();
 
-  // Use `number | null` in RN (setTimeout returns a number)
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -34,14 +33,12 @@ export default function SearchScreen() {
   }, [searchState.query]);
 
   useEffect(() => {
-    // clear existing timeout if any
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
 
     if (query.length > 2) {
-      // assign the numeric id returned by setTimeout
       timeoutRef.current = setTimeout(async () => {
         const results = await tmdbService.getSuggestions(query);
         setSuggestions(results as TMDBSearchResult[]);
@@ -53,7 +50,6 @@ export default function SearchScreen() {
     return () => {
       if (timeoutRef.current !== null) {
         clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
       }
     };
   }, [query]);
@@ -66,6 +62,7 @@ export default function SearchScreen() {
     Keyboard.dismiss();
 
     const results = await tmdbService.searchMovies(query);
+    setSuggestions([]);
     updateSearchState({ results, query });
     setLoading(false);
   };
@@ -73,12 +70,18 @@ export default function SearchScreen() {
   const handleSuggestionSelect = (item: TMDBSearchResult) => {
     setQuery(item.title || item.name || '');
     setSuggestions([]);
-    router.push(`/search/movie-details?id=${item.id}&type=${item.media_type}`);
+    router.push({
+      pathname: '/search/movie-details',
+      params: { id: String(item.id), type: item.media_type }
+    } as any);
   };
 
   const handleMovieSelect = (movie: TMDBSearchResult) => {
     updateSearchState({ selectedMovie: movie });
-    router.push(`/search/movie-details?id=${movie.id}&type=${movie.media_type}`);
+    router.push({
+      pathname: '/search/movie-details',
+      params: { id: String(movie.id), type: movie.media_type }
+    } as any);
   };
 
   const isInWatchlist = (movie: TMDBSearchResult) => {
@@ -101,6 +104,7 @@ export default function SearchScreen() {
     <TouchableOpacity
       style={styles.movieCard}
       onPress={() => handleMovieSelect(item)}
+      activeOpacity={0.85}
     >
       <ImageWithFallback
         source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
@@ -120,12 +124,11 @@ export default function SearchScreen() {
       <TouchableOpacity
         style={styles.watchlistButton}
         onPress={() => addToWatchlist(item)}
-        disabled={isInWatchlist(item)}
       >
         <Ionicons
           name={isInWatchlist(item) ? "bookmark" : "bookmark-outline"}
           size={24}
-          color={isInWatchlist(item) ? "#ff4444" : "#fff"}
+          color={isInWatchlist(item) ? "#00D4FF" : "#FFFFFF"}
         />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -161,7 +164,7 @@ export default function SearchScreen() {
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff4444" />
+          <ActivityIndicator size="large" color="#00D4FF" />
         </View>
       )}
 
@@ -191,8 +194,9 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#0A0A0A',
     padding: 16,
+    paddingTop: 60,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -200,25 +204,30 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#1A1A1A',
     color: '#fff',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginRight: 8,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   searchButton: {
-    backgroundColor: '#ff4444',
+    backgroundColor: '#00D4FF',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: 50,
   },
   suggestionsContainer: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
     maxHeight: 200,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   suggestionsList: {
     flex: 1,
@@ -235,8 +244,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   suggestionType: {
-    color: '#888',
+    color: '#00D4FF',
     fontSize: 14,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -251,16 +261,18 @@ const styles = StyleSheet.create({
   },
   movieCard: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
     marginBottom: 12,
     padding: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
   },
   poster: {
     width: 60,
     height: 90,
-    borderRadius: 4,
+    borderRadius: 8,
   },
   movieInfo: {
     flex: 1,
@@ -278,8 +290,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   movieType: {
-    color: '#ff4444',
+    color: '#00D4FF',
     fontSize: 12,
+    fontWeight: '600',
   },
   watchlistButton: {
     padding: 8,

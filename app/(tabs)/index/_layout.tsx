@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 
-export default function SearchStackLayout() {
+export default function IndexStackLayout() {
   return (
     <Stack
       screenOptions={{
@@ -13,13 +13,13 @@ export default function SearchStackLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen 
-        name="movie-details" 
-        options={{ 
+      <Stack.Screen
+        name="movie-details"
+        options={{
           headerShown: false,
           presentation: 'card',
           animation: 'slide_from_bottom',
-        }} 
+        }}
       />
     </Stack>
   );

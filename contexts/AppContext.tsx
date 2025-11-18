@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { TMDBSearchResult } from '../types/tmdb';
 
 interface AppContextType {
@@ -64,26 +64,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     saveWatchlist();
   }, [watchlist]);
 
-  const addToWatchlist = (movie: TMDBSearchResult) => {
+  const addToWatchlist = useCallback((movie: TMDBSearchResult) => {
     setWatchlist(prev => {
       const exists = prev.find(item => item.id === movie.id && item.media_type === movie.media_type);
       if (exists) return prev;
       const newWatchlist = [...prev, { ...movie, addedAt: new Date().toISOString() }];
       return newWatchlist;
     });
-  };
+  }, []);
 
-  const removeFromWatchlist = (id: number, mediaType: string) => {
+  const removeFromWatchlist = useCallback((id: number, mediaType: string) => {
     setWatchlist(prev => prev.filter(item => !(item.id === id && item.media_type === mediaType)));
-  };
+  }, []);
 
-  const reorderWatchlist = (newOrder: (TMDBSearchResult & { addedAt: string })[]) => {
+  const reorderWatchlist = useCallback((newOrder: (TMDBSearchResult & { addedAt: string })[]) => {
     setWatchlist(newOrder);
-  };
+  }, []);
 
-  const updateSearchState = (updates: Partial<AppContextType['searchState']>) => {
+  const updateSearchState = useCallback((updates: Partial<AppContextType['searchState']>) => {
     setSearchState(prev => ({ ...prev, ...updates }));
-  };
+  }, []);
 
   return (
     <AppContext.Provider value={{

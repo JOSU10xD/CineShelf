@@ -1,9 +1,9 @@
-// app/(tabs)/search/movie-details.tsx
+// app/(tabs)/index/movie-details.tsx
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { MovieDetailsScreen } from '../../../components/MovieDetailsScreen';
 
-export default function SearchMovieDetailsWrapper() {
+export default function HomeMovieDetailsWrapper() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;

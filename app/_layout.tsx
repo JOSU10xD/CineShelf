@@ -4,7 +4,13 @@ import { AppProvider } from '../contexts/AppContext';
 export default function RootLayout() {
   return (
     <AppProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ 
+        headerShown: false,
+        animation: 'slide_from_right',
+        animationDuration: 350,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+      }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </AppProvider>
