@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import DraggableFlatList, {
   RenderItemParams,
+  ScaleDecorator,
 } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
@@ -75,76 +76,91 @@ export default function WatchlistScreen() {
     if (Platform.OS === 'ios') {
       try {
         const Haptics = require('expo-haptics');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.notificationAsync(
+          require('expo-haptics').NotificationFeedbackType.Success
+        );
       } catch (error) {
         console.log('Haptics not available');
       }
     }
   }, [reorderWatchlist]);
 
-  const renderMovie = useCallback(({ item, drag, isActive, getIndex }: RenderItemParams<WatchlistItem>) => {
+  const renderMovie = useCallback(({ item, drag, isActive }: RenderItemParams<WatchlistItem>) => {
     return (
-      <View
-        style={[
-          styles.movieCard,
-          isActive && styles.dragging,
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.cardContent}
-          onPress={() => !isActive && handleMoviePress(item)}
-          activeOpacity={0.7}
-          disabled={isActive}
+      <ScaleDecorator>
+        <View
+          style={[
+            styles.movieCard,
+            isActive && styles.dragging,
+          ]}
         >
-          <ImageWithFallback
-            source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-            style={styles.poster}
-            type="poster"
-          />
+          <TouchableOpacity
+            style={styles.cardContent}
+            onPress={() => !isActive && handleMoviePress(item)}
+            activeOpacity={0.7}
+            disabled={isActive}
+          >
+            <ImageWithFallback
+              source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
+              style={styles.poster}
+              type="poster"
+            />
 
-          <View style={styles.movieInfo}>
-            <Text style={styles.movieTitle} numberOfLines={2}>
-              {item.title || item.name}
-            </Text>
-            <View style={styles.movieDetails}>
-              <View style={styles.typeBadge}>
-                <Text style={styles.movieType}>
-                  {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
-                </Text>
-              </View>
-              <Text style={styles.movieYear}>
-                {item.release_date ? new Date(item.release_date).getFullYear() :
-                  item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+            <View style={styles.movieInfo}>
+              <Text style={styles.movieTitle} numberOfLines={2}>
+                {item.title || item.name}
               </Text>
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.rating}>{item.vote_average?.toFixed(1)}</Text>
+              <View style={styles.movieDetails}>
+                <View style={styles.typeBadge}>
+                  <Text style={styles.movieType}>
+                    {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
+                  </Text>
+                </View>
+                <Text style={styles.movieYear}>
+                  {item.release_date ? new Date(item.release_date).getFullYear() :
+                    item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+                </Text>
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Text style={styles.rating}>{item.vote_average?.toFixed(1)}</Text>
+                </View>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.actions}>
             <TouchableOpacity
               style={[styles.actionButton, styles.removeButton]}
               onPress={() => handleRemove(item.id, item.media_type, item.title || item.name || '')}
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              disabled={isActive}
             >
               <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.dragHandle]}
+              style={[styles.actionButton, styles.dragHandle, isActive && styles.dragHandleActive]}
               onLongPress={drag}
               delayLongPress={100}
               hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              activeOpacity={0.8}
             >
-              <Ionicons name="reorder-three" size={24} color="#00D4FF" />
+              <Ionicons 
+                name="reorder-three" 
+                size={26} 
+                color={isActive ? "#FFFFFF" : "#00D4FF"} 
+              />
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
 
-        {isActive && <View style={styles.dragIndicator} />}
-      </View>
+          {isActive && (
+            <View style={styles.dragOverlay}>
+              <View style={styles.dragIndicatorTop} />
+              <View style={styles.dragIndicatorBottom} />
+            </View>
+          )}
+        </View>
+      </ScaleDecorator>
     );
   }, [handleMoviePress, handleRemove]);
 
@@ -172,8 +188,19 @@ export default function WatchlistScreen() {
         <Text style={styles.title}>My Watchlist</Text>
         <Text style={styles.subtitle}>
           {watchlist.length} {watchlist.length === 1 ? 'item' : 'items'}
-          {isDragging && ' • Reordering...'}
         </Text>
+        {!isDragging && (
+          <View style={styles.hintContainer}>
+            <Ionicons name="hand-left-outline" size={14} color="#00D4FF" />
+            <Text style={styles.hint}>Long press the grip icon to reorder</Text>
+          </View>
+        )}
+        {isDragging && (
+          <View style={styles.draggingIndicator}>
+            <View style={styles.draggingDot} />
+            <Text style={styles.draggingText}>Reordering...</Text>
+          </View>
+        )}
       </View>
 
       <DraggableFlatList
@@ -182,12 +209,13 @@ export default function WatchlistScreen() {
         keyExtractor={keyExtractor}
         onDragBegin={handleDragBegin}
         onDragEnd={handleDragEnd}
-        activationDistance={10}
+        activationDistance={5}
         containerStyle={styles.listContainer}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        autoscrollThreshold={80}
-        autoscrollSpeed={200}
+        autoscrollThreshold={100}
+        autoscrollSpeed={150}
+        dragHitSlop={{ top: -10, bottom: -10, left: -10, right: -10 }}
       />
     </GestureHandlerRootView>
   );
@@ -215,6 +243,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#00D4FF',
     fontWeight: '600',
+    marginBottom: 8,
+  },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  hint: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  draggingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  draggingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00D4FF',
+  },
+  draggingText: {
+    fontSize: 14,
+    color: '#00D4FF',
+    fontWeight: '600',
   },
   listContainer: {
     flex: 1,
@@ -239,19 +296,39 @@ const styles = StyleSheet.create({
   dragging: {
     backgroundColor: '#252525',
     shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 20,
     borderColor: '#00D4FF',
     borderWidth: 2,
-    opacity: 0.95,
-    transform: [{ scale: 1.02 }],
+    opacity: 0.98,
+  },
+  dragOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  dragIndicatorTop: {
+    height: 3,
+    backgroundColor: '#00D4FF',
+    width: '100%',
+  },
+  dragIndicatorBottom: {
+    position: 'absolute',
+    bottom: 0,
+    height: 3,
+    backgroundColor: '#00D4FF',
+    width: '100%',
   },
   cardContent: {
     flexDirection: 'row',
     padding: 16,
     alignItems: 'center',
+    flex: 1,
   },
   poster: {
     width: 60,
@@ -314,22 +391,29 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingRight: 16,
   },
   actionButton: {
-    padding: 8,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   removeButton: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
   },
   dragHandle: {
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    backgroundColor: 'rgba(0, 212, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.3)',
+    paddingHorizontal: 8,
   },
-  dragIndicator: {
-    height: 3,
+  dragHandleActive: {
     backgroundColor: '#00D4FF',
-    width: '100%',
+    borderColor: '#00D4FF',
   },
   emptyContainer: {
     flex: 1,
