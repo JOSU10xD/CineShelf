@@ -46,7 +46,7 @@ export default function WatchlistScreen() {
 
   const handleMoviePress = useCallback((movie: WatchlistItem) => {
     if (isDragging) return;
-    
+
     router.push({
       pathname: '/watchlist/movie-details',
       params: { id: String(movie.id), type: movie.media_type }
@@ -55,7 +55,7 @@ export default function WatchlistScreen() {
 
   const handleDragBegin = useCallback(() => {
     setIsDragging(true);
-    
+
     // Haptic feedback
     if (Platform.OS === 'ios') {
       try {
@@ -70,7 +70,7 @@ export default function WatchlistScreen() {
   const handleDragEnd = useCallback(({ data }: { data: WatchlistItem[] }) => {
     setIsDragging(false);
     reorderWatchlist(data);
-    
+
     // Success haptic feedback
     if (Platform.OS === 'ios') {
       try {
@@ -101,7 +101,7 @@ export default function WatchlistScreen() {
             style={styles.poster}
             type="poster"
           />
-          
+
           <View style={styles.movieInfo}>
             <Text style={styles.movieTitle} numberOfLines={2}>
               {item.title || item.name}
@@ -114,7 +114,7 @@ export default function WatchlistScreen() {
               </View>
               <Text style={styles.movieYear}>
                 {item.release_date ? new Date(item.release_date).getFullYear() :
-                 item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+                  item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
               </Text>
               <View style={styles.ratingBadge}>
                 <Ionicons name="star" size={12} color="#FFD700" />
@@ -132,7 +132,7 @@ export default function WatchlistScreen() {
               <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.actionButton, styles.dragHandle]}
               onLongPress={drag}
               delayLongPress={100}
@@ -148,7 +148,7 @@ export default function WatchlistScreen() {
     );
   }, [handleMoviePress, handleRemove]);
 
-  const keyExtractor = useCallback((item: WatchlistItem) => 
+  const keyExtractor = useCallback((item: WatchlistItem) =>
     `${item.id}-${item.media_type}-${item.addedAt}`, []
   );
 
