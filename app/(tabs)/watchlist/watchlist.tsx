@@ -2,15 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  Alert,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import DraggableFlatList, {
   RenderItemParams,
+  ScaleDecorator,
 } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
@@ -25,28 +25,12 @@ export default function WatchlistScreen() {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleRemove = useCallback((id: number, mediaType: string, title: string) => {
-    Alert.alert(
-      'Remove from Watchlist',
-      `Remove "${title}" from your watchlist?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            removeFromWatchlist(id, mediaType);
-            Alert.alert('Success', `"${title}" has been removed from your watchlist.`, [
-              { text: 'OK' }
-            ]);
-          }
-        },
-      ]
-    );
+    removeFromWatchlist(id, mediaType);
   }, [removeFromWatchlist]);
 
   const handleMoviePress = useCallback((movie: WatchlistItem) => {
     if (isDragging) return;
-    
+
     router.push({
       pathname: '/watchlist/movie-details',
       params: { id: String(movie.id), type: movie.media_type }
@@ -55,9 +39,8 @@ export default function WatchlistScreen() {
 
   const handleDragBegin = useCallback(() => {
     setIsDragging(true);
-    
-    // Haptic feedback
-    if (Platform.OS === 'ios') {
+
+    if (Platform.OS !== 'web') {
       try {
         const Haptics = require('expo-haptics');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -70,9 +53,8 @@ export default function WatchlistScreen() {
   const handleDragEnd = useCallback(({ data }: { data: WatchlistItem[] }) => {
     setIsDragging(false);
     reorderWatchlist(data);
-    
-    // Success haptic feedback
-    if (Platform.OS === 'ios') {
+
+    if (Platform.OS !== 'web') {
       try {
         const Haptics = require('expo-haptics');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -82,73 +64,76 @@ export default function WatchlistScreen() {
     }
   }, [reorderWatchlist]);
 
-  const renderMovie = useCallback(({ item, drag, isActive, getIndex }: RenderItemParams<WatchlistItem>) => {
+  const renderMovie = useCallback(({ item, drag, isActive }: RenderItemParams<WatchlistItem>) => {
     return (
-      <View
-        style={[
-          styles.movieCard,
-          isActive && styles.dragging,
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.cardContent}
-          onPress={() => !isActive && handleMoviePress(item)}
-          activeOpacity={0.7}
-          disabled={isActive}
+      <ScaleDecorator>
+        <View
+          style={[
+            styles.movieCard,
+            isActive && styles.dragging,
+          ]}
         >
-          <ImageWithFallback
-            source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-            style={styles.poster}
-            type="poster"
-          />
-          
-          <View style={styles.movieInfo}>
-            <Text style={styles.movieTitle} numberOfLines={2}>
-              {item.title || item.name}
-            </Text>
-            <View style={styles.movieDetails}>
-              <View style={styles.typeBadge}>
-                <Text style={styles.movieType}>
-                  {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
-                </Text>
-              </View>
-              <Text style={styles.movieYear}>
-                {item.release_date ? new Date(item.release_date).getFullYear() :
-                 item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+          <TouchableOpacity
+            style={styles.cardContent}
+            onPress={() => !isActive && handleMoviePress(item)}
+            activeOpacity={0.7}
+            disabled={isActive}
+          >
+            <ImageWithFallback
+              source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
+              style={styles.poster}
+              type="poster"
+            />
+
+            <View style={styles.movieInfo}>
+              <Text style={styles.movieTitle} numberOfLines={2}>
+                {item.title || item.name}
               </Text>
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.rating}>{item.vote_average?.toFixed(1)}</Text>
+              <View style={styles.movieDetails}>
+                <View style={styles.typeBadge}>
+                  <Text style={styles.movieType}>
+                    {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
+                  </Text>
+                </View>
+                <Text style={styles.movieYear}>
+                  {item.release_date ? new Date(item.release_date).getFullYear() :
+                   item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+                </Text>
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Text style={styles.rating}>{item.vote_average?.toFixed(1)}</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.removeButton]}
-              onPress={() => handleRemove(item.id, item.media_type, item.title || item.name || '')}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
-            </TouchableOpacity>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.removeButton]}
+                onPress={() => handleRemove(item.id, item.media_type, item.title || item.name || '')}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+              </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.dragHandle]}
-              onLongPress={drag}
-              delayLongPress={100}
-              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-            >
-              <Ionicons name="reorder-three" size={24} color="#00D4FF" />
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.dragHandle]}
+                onLongPress={drag}
+                delayLongPress={100}
+                activeOpacity={0.6}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="reorder-three" size={26} color="#00D4FF" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
 
-        {isActive && <View style={styles.dragIndicator} />}
-      </View>
+          {isActive && <View style={styles.dragIndicator} />}
+        </View>
+      </ScaleDecorator>
     );
   }, [handleMoviePress, handleRemove]);
 
-  const keyExtractor = useCallback((item: WatchlistItem) => 
+  const keyExtractor = useCallback((item: WatchlistItem) =>
     `${item.id}-${item.media_type}-${item.addedAt}`, []
   );
 
@@ -182,12 +167,14 @@ export default function WatchlistScreen() {
         keyExtractor={keyExtractor}
         onDragBegin={handleDragBegin}
         onDragEnd={handleDragEnd}
-        activationDistance={10}
+        activationDistance={8}
         containerStyle={styles.listContainer}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        autoscrollThreshold={80}
-        autoscrollSpeed={200}
+        autoscrollThreshold={120}
+        autoscrollSpeed={300}
+        dragItemOverflow={true}
+        scrollEnabled={!isDragging}
       />
     </GestureHandlerRootView>
   );
@@ -234,19 +221,18 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#252525',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   dragging: {
     backgroundColor: '#252525',
     shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.7,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
     shadowRadius: 20,
-    elevation: 15,
+    elevation: 25,
     borderColor: '#00D4FF',
     borderWidth: 2,
-    opacity: 0.95,
-    transform: [{ scale: 1.02 }],
+    zIndex: 1000,
   },
   cardContent: {
     flexDirection: 'row',
@@ -314,7 +300,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
   actionButton: {
     padding: 8,
@@ -325,11 +311,16 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.3)',
   },
   dragIndicator: {
     height: 3,
     backgroundColor: '#00D4FF',
     width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
   },
   emptyContainer: {
     flex: 1,

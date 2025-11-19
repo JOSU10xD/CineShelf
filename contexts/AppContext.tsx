@@ -36,6 +36,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     results: [],
     selectedMovie: null
   });
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Load watchlist from storage on app start
   useEffect(() => {
@@ -47,6 +48,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('Failed to load watchlist', error);
+      } finally {
+        setIsLoaded(true);
       }
     };
     loadWatchlist();
@@ -54,6 +57,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Save watchlist to storage whenever it changes
   useEffect(() => {
+    if (!isLoaded) return;
+
     const saveWatchlist = async () => {
       try {
         await AsyncStorage.setItem('@cineshelf_watchlist', JSON.stringify(watchlist));
@@ -62,7 +67,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     };
     saveWatchlist();
-  }, [watchlist]);
+  }, [watchlist, isLoaded]);
 
   const addToWatchlist = useCallback((movie: TMDBSearchResult) => {
     setWatchlist(prev => {
