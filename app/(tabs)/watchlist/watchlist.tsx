@@ -42,11 +42,11 @@ const CARD_HEIGHT = 130;
 const MARGIN_BOTTOM = 12;
 const ITEM_HEIGHT = CARD_HEIGHT + MARGIN_BOTTOM;
 
-// Tuning values for UX
-const SCROLL_EDGE_THRESHOLD = 100; // px from edge to start scrolling
-const SCROLL_STEP = 10; // px per frame
-const LONG_PRESS_DELAY = 200; // ms
-const SPRING_CONFIG = { damping: 20, stiffness: 150 }; // Snappy but smooth
+// Auto-scroll configuration
+const AUTO_SCROLL_ZONE = 150; // Distance from top/bottom edge to trigger auto-scroll
+const AUTO_SCROLL_SPEED = 3; // Pixels per frame (moderate speed)
+const LONG_PRESS_DELAY = 200;
+const SPRING_CONFIG = { damping: 20, stiffness: 150 };
 
 // Helper to generate a stable ID
 const getItemId = (item: WatchlistItem) => `${item.id}-${item.media_type}-${item.addedAt}`;
@@ -72,8 +72,9 @@ export default function WatchlistScreen() {
   const containerHeight = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const isDragging = useSharedValue(false);
-  const autoScrollDirection = useSharedValue(0);
-  const activeDropIndex = useSharedValue(-1); // For visual placeholder
+  const shouldAutoScroll = useSharedValue(false);
+  const autoScrollDirection = useSharedValue(0); // -1 for up, 1 for down, 0 for none
+  const activeDropIndex = useSharedValue(-1);
 
   // Initialize positions
   useEffect(() => {
@@ -85,16 +86,19 @@ export default function WatchlistScreen() {
     contentHeight.value = localItems.length * ITEM_HEIGHT;
   }, [localItems, positions, contentHeight]);
 
-  // Auto-scroll loop
+  // Auto-scroll loop - this scrolls the list
   useFrameCallback(() => {
-    if (autoScrollDirection.value !== 0 && isDragging.value) {
-      const scrollChange = autoScrollDirection.value * SCROLL_STEP;
-      const targetScroll = scrollY.value + scrollChange;
-      const maxScroll = contentHeight.value - containerHeight.value + 150;
+    if (shouldAutoScroll.value && isDragging.value && autoScrollDirection.value !== 0) {
+      const targetScroll = scrollY.value + (autoScrollDirection.value * AUTO_SCROLL_SPEED);
+      const maxScroll = Math.max(0, contentHeight.value - containerHeight.value);
       const clampedScroll = Math.max(0, Math.min(maxScroll, targetScroll));
 
       if (Math.abs(scrollY.value - clampedScroll) > 0.1) {
         scrollTo(scrollViewRef, 0, clampedScroll, false);
+      } else {
+        // Reached the end, stop auto-scrolling
+        shouldAutoScroll.value = false;
+        autoScrollDirection.value = 0;
       }
     }
   });
@@ -127,7 +131,6 @@ export default function WatchlistScreen() {
     reorderWatchlist(newOrder);
   }, [localItems, reorderWatchlist]);
 
-  // Haptic wrappers
   const triggerHapticStart = useCallback(() => {
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -146,7 +149,7 @@ export default function WatchlistScreen() {
 
   const triggerHapticEnd = useCallback(() => {
     try {
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Success);
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
       // Ignore haptic errors
     }
@@ -171,7 +174,7 @@ export default function WatchlistScreen() {
       borderRadius: 16,
       borderStyle: 'dashed',
       opacity: activeDropIndex.value >= 0 ? withTiming(1) : withTiming(0),
-      zIndex: -1, // Behind items
+      zIndex: -1,
     };
   });
 
@@ -242,6 +245,7 @@ export default function WatchlistScreen() {
             onRemove={handleRemove}
             onReorderComplete={handleReorderComplete}
             globalIsDragging={isDragging}
+            shouldAutoScroll={shouldAutoScroll}
             autoScrollDirection={autoScrollDirection}
             activeDropIndex={activeDropIndex}
             onHapticStart={triggerHapticStart}
@@ -267,6 +271,7 @@ interface SortableItemProps {
   onRemove: (id: number, mediaType: string) => void;
   onReorderComplete: (positions: Record<string, number>) => void;
   globalIsDragging: SharedValue<boolean>;
+  shouldAutoScroll: SharedValue<boolean>;
   autoScrollDirection: SharedValue<number>;
   activeDropIndex: SharedValue<number>;
   onHapticStart: () => void;
@@ -285,6 +290,7 @@ function SortableItem({
   onRemove,
   onReorderComplete,
   globalIsDragging,
+  shouldAutoScroll,
   autoScrollDirection,
   activeDropIndex,
   onHapticStart,
@@ -298,43 +304,29 @@ function SortableItem({
   
   const dragTranslationY = useSharedValue(0);
   const startTop = useSharedValue(0);
+  const lastSwapIndex = useSharedValue(-1);
+  const autoScrollAccumulator = useSharedValue(0); // Tracks auto-scroll movement
 
   // Derived top position
   const top = useDerivedValue(() => {
     if (isDragging.value) {
-      return startTop.value + dragTranslationY.value;
+      // During drag, position = initial position + manual drag + auto-scroll compensation
+      return startTop.value + dragTranslationY.value + autoScrollAccumulator.value;
     }
     const index = positions.value[id];
-    // Safety check for NaN
     if (typeof index !== 'number') return 0;
     return withSpring(index * ITEM_HEIGHT, SPRING_CONFIG);
   }, [positions, id]);
 
-  const panGesture = Gesture.Pan()
-    .enabled(dragMode)
-    .activateAfterLongPress(LONG_PRESS_DELAY)
-    .onStart(() => {
-      // Safety check: ensure we have a valid position to start from
-      const currentPos = positions.value[id];
-      if (typeof currentPos !== 'number') return;
+  // Frame callback to update dragged card position during auto-scroll
+  useFrameCallback(() => {
+    if (isDragging.value && shouldAutoScroll.value && autoScrollDirection.value !== 0) {
+      // Move the dragged card in the opposite direction of scroll
+      // This makes it appear to move through the list
+      autoScrollAccumulator.value += autoScrollDirection.value * AUTO_SCROLL_SPEED;
 
-      isDragging.value = true;
-      globalIsDragging.value = true;
-      zIndex.value = 100;
-      scale.value = withSpring(1.05, SPRING_CONFIG);
-      
-      startTop.value = currentPos * ITEM_HEIGHT;
-      dragTranslationY.value = 0;
-      activeDropIndex.value = currentPos;
-
-      runOnJS(onHapticStart)();
-    })
-    .onUpdate((event) => {
-      if (!isDragging.value) return;
-
-      dragTranslationY.value = event.translationY;
-
-      const currentAbsoluteY = startTop.value + event.translationY;
+      // Calculate the current absolute position
+      const currentAbsoluteY = startTop.value + dragTranslationY.value + autoScrollAccumulator.value;
       const centerOffset = currentAbsoluteY + CARD_HEIGHT / 2;
       const newIndex = Math.floor(centerOffset / ITEM_HEIGHT);
       const clampedIndex = Math.max(0, Math.min(itemsCount - 1, newIndex));
@@ -367,19 +359,106 @@ function SortableItem({
         }
 
         positions.value = newPositions;
-        runOnJS(onHapticMove)();
+        
+        if (clampedIndex !== lastSwapIndex.value) {
+          runOnJS(onHapticMove)();
+          lastSwapIndex.value = clampedIndex;
+        }
       }
 
-      // Auto Scroll
-      const screenY = currentAbsoluteY - scrollY.value;
-      const lowerBound = containerHeight.value - SCROLL_EDGE_THRESHOLD;
-      const upperBound = SCROLL_EDGE_THRESHOLD;
+      // Check if we've reached the end
+      if (clampedIndex === 0 && autoScrollDirection.value === -1) {
+        // Reached top
+        shouldAutoScroll.value = false;
+        autoScrollDirection.value = 0;
+      } else if (clampedIndex === itemsCount - 1 && autoScrollDirection.value === 1) {
+        // Reached bottom
+        shouldAutoScroll.value = false;
+        autoScrollDirection.value = 0;
+      }
+    }
+  });
 
-      if (screenY > lowerBound) {
-        autoScrollDirection.value = 1;
-      } else if (screenY < upperBound) {
+  const panGesture = Gesture.Pan()
+    .enabled(dragMode)
+    .activateAfterLongPress(LONG_PRESS_DELAY)
+    .onStart(() => {
+      const currentPos = positions.value[id];
+      if (typeof currentPos !== 'number') return;
+
+      isDragging.value = true;
+      globalIsDragging.value = true;
+      zIndex.value = 100;
+      scale.value = withSpring(1.05, SPRING_CONFIG);
+      
+      startTop.value = currentPos * ITEM_HEIGHT;
+      dragTranslationY.value = 0;
+      autoScrollAccumulator.value = 0;
+      activeDropIndex.value = currentPos;
+      lastSwapIndex.value = currentPos;
+
+      runOnJS(onHapticStart)();
+    })
+    .onUpdate((event) => {
+      if (!isDragging.value) return;
+
+      dragTranslationY.value = event.translationY;
+
+      // Calculate current position including auto-scroll offset
+      const currentAbsoluteY = startTop.value + event.translationY + autoScrollAccumulator.value;
+      const centerOffset = currentAbsoluteY + CARD_HEIGHT / 2;
+      const newIndex = Math.floor(centerOffset / ITEM_HEIGHT);
+      const clampedIndex = Math.max(0, Math.min(itemsCount - 1, newIndex));
+
+      // Update visual placeholder
+      activeDropIndex.value = clampedIndex;
+
+      const oldIndex = positions.value[id];
+
+      if (clampedIndex !== oldIndex) {
+        const newPositions = { ...positions.value };
+        
+        for (const key in newPositions) {
+          const currentIndex = newPositions[key];
+          
+          if (key === id) {
+            newPositions[key] = clampedIndex;
+            continue;
+          }
+
+          if (oldIndex < clampedIndex) {
+            if (currentIndex > oldIndex && currentIndex <= clampedIndex) {
+              newPositions[key] = currentIndex - 1;
+            }
+          } else {
+            if (currentIndex >= clampedIndex && currentIndex < oldIndex) {
+              newPositions[key] = currentIndex + 1;
+            }
+          }
+        }
+
+        positions.value = newPositions;
+        
+        if (clampedIndex !== lastSwapIndex.value) {
+          runOnJS(onHapticMove)();
+          lastSwapIndex.value = clampedIndex;
+        }
+      }
+
+      // Auto-scroll logic based on screen position
+      const screenY = currentAbsoluteY - scrollY.value;
+
+      if (screenY < AUTO_SCROLL_ZONE && clampedIndex > 0) {
+        // Near top - scroll up
+        shouldAutoScroll.value = true;
         autoScrollDirection.value = -1;
+      } else if (screenY > containerHeight.value - AUTO_SCROLL_ZONE && clampedIndex < itemsCount - 1) {
+        // Near bottom - scroll down
+        shouldAutoScroll.value = true;
+        autoScrollDirection.value = 1;
       } else {
+        // In middle zone - stop auto-scrolling
+        shouldAutoScroll.value = false;
         autoScrollDirection.value = 0;
       }
     })
@@ -388,11 +467,14 @@ function SortableItem({
 
       isDragging.value = false;
       globalIsDragging.value = false;
+      shouldAutoScroll.value = false;
       autoScrollDirection.value = 0;
-      activeDropIndex.value = -1; // Hide placeholder
+      activeDropIndex.value = -1;
       zIndex.value = 0;
       scale.value = withSpring(1, SPRING_CONFIG);
-      dragTranslationY.value = 0; 
+      dragTranslationY.value = 0;
+      autoScrollAccumulator.value = 0;
+      lastSwapIndex.value = -1;
 
       runOnJS(onHapticEnd)();
       runOnJS(onReorderComplete)(positions.value);
