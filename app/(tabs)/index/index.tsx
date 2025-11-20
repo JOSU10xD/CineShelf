@@ -4,11 +4,13 @@ import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpa
 import { TMDBSearchResult } from '../../../../types/tmdb';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { tmdbService } from '../../../services/tmdb';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { watchlist } = useApp();
+  const { theme } = useTheme();
   const [trending, setTrending] = useState<TMDBSearchResult[]>([]);
   const [popular, setPopular] = useState<TMDBSearchResult[]>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
@@ -41,31 +43,30 @@ export default function HomeScreen() {
   };
 
   const renderTile = ({ item }: { item: TMDBSearchResult }) => (
-    <TouchableOpacity style={styles.tile} onPress={() => openFromHome(item)} activeOpacity={0.85}>
-      <ImageWithFallback
-        source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-        style={styles.tileImage}
-        type="poster"
-      />
-      <Text style={styles.tileTitle} numberOfLines={2}>{item.title || item.name}</Text>
+    <TouchableOpacity
+      style={styles.tile}
+      onPress={() => openFromHome(item)}
+      activeOpacity={0.85}
+    >
+      <View style={[styles.imageContainer, { shadowColor: theme.colors.text }]}>
+        <ImageWithFallback
+          source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
+          style={styles.tileImage}
+          type="poster"
+        />
+      </View>
+      <Text style={[styles.tileTitle, { color: theme.colors.text }]} numberOfLines={2}>{item.title || item.name}</Text>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.titleCine}>Cine</Text>
-            <Text style={styles.titleShelf}>Shelf</Text>
-          </View>
-          <Text style={styles.subtitle}>Your Movie Wishlist</Text>
-        </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trending Now</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Trending Now</Text>
           {loadingTrending ? (
-            <ActivityIndicator color="#00D4FF" size="large" />
+            <ActivityIndicator color={theme.colors.primary} size="large" />
           ) : (
             <FlatList
               data={trending}
@@ -73,15 +74,15 @@ export default function HomeScreen() {
               keyExtractor={(item) => `${item.id}-${item.media_type}`}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}
+              contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
             />
           )}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>All Time Popular</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>All Time Popular</Text>
           {loadingPopular ? (
-            <ActivityIndicator color="#00D4FF" size="large" />
+            <ActivityIndicator color={theme.colors.primary} size="large" />
           ) : (
             <FlatList
               data={popular}
@@ -89,15 +90,15 @@ export default function HomeScreen() {
               keyExtractor={(item) => `${item.id}-${item.media_type}`}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}
+              contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
             />
           )}
         </View>
 
-        <View style={styles.stats}>
+        <View style={[styles.stats, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{watchlist.length}</Text>
-            <Text style={styles.statLabel}>Movies in Watchlist</Text>
+            <Text style={[styles.statNumber, { color: theme.colors.primary }]}>{watchlist.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.secondary }]}>Movies in Watchlist</Text>
           </View>
         </View>
       </ScrollView>
@@ -106,64 +107,40 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
-  header: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#0A0A0A',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
-    alignItems: 'center',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  titleCine: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#00D4FF',
-    fontFamily: 'System',
-  },
-  titleShelf: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    fontFamily: 'System',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#888',
-    textAlign: 'center',
-    fontFamily: 'System',
-  },
+  container: { flex: 1 },
   section: {
-    marginTop: 24,
+    marginTop: 32,
   },
   sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     marginBottom: 16,
-    paddingLeft: 16,
+    paddingLeft: 20,
     fontFamily: 'System',
+    letterSpacing: 0.5,
   },
   tile: {
     width: 140,
-    marginRight: 12,
+    marginRight: 16,
     alignItems: 'center',
   },
+  imageContainer: {
+    width: 140,
+    height: 210,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: 12,
+  },
   tileImage: {
-    width: 120,
-    height: 180,
-    borderRadius: 12,
-    backgroundColor: '#1A1A1A',
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
   },
   tileTitle: {
-    color: '#FFFFFF',
-    marginTop: 8,
+    marginTop: 4,
     fontSize: 14,
     textAlign: 'center',
     fontWeight: '600',
@@ -171,20 +148,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   stats: {
-    padding: 20,
+    margin: 20,
+    padding: 24,
     alignItems: 'center',
-    marginTop: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginTop: 40,
   },
   statItem: { alignItems: 'center' },
-  statNumber: { 
-    fontSize: 48, 
-    fontWeight: 'bold', 
-    color: '#00D4FF',
+  statNumber: {
+    fontSize: 48,
+    fontWeight: '800',
     fontFamily: 'System',
+    marginBottom: 4,
   },
-  statLabel: { 
-    fontSize: 16, 
-    color: '#888',
+  statLabel: {
+    fontSize: 16,
     fontFamily: 'System',
     fontWeight: '600',
   },

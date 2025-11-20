@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ImageWithFallbackProps {
   source: { uri: string };
@@ -13,6 +14,7 @@ export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
   style,
   type = 'poster',
 }) => {
+  const { theme } = useTheme();
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -38,8 +40,8 @@ export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
 
   if (imageError || !source?.uri) {
     return (
-      <View style={[style, styles.placeholder]}>
-        <Ionicons name={getIconName()} size={getIconSize()} color="#333" />
+      <View style={[style, styles.placeholder, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <Ionicons name={getIconName()} size={getIconSize()} color={theme.colors.border} />
       </View>
     );
   }
@@ -55,8 +57,8 @@ export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
         resizeMode="cover"
       />
       {!imageLoaded && (
-        <View style={[style, styles.loadingPlaceholder]}>
-          <Ionicons name="image-outline" size={getIconSize()} color="#333" />
+        <View style={[style, styles.loadingPlaceholder, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Ionicons name="image-outline" size={getIconSize()} color={theme.colors.border} />
         </View>
       )}
     </View>
@@ -68,19 +70,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   placeholder: {
-    backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#252525',
   },
   loadingPlaceholder: {
     position: 'absolute',
-    backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#252525',
   },
   hidden: {
     opacity: 0,

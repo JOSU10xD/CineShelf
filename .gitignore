@@ -21,7 +21,7 @@ yarn.lock
 
 # Metro / Babel cache
 .cache/
-.expo/web/cache/
+.expo/
 
 # =========================================================
 # Env / Secrets / Sensitive

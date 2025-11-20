@@ -32,6 +32,7 @@ import Animated, {
 
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { TMDBSearchResult } from '../../../types/tmdb';
 
 // --- Constants & Types ---
@@ -55,8 +56,14 @@ const getItemId = (item: WatchlistItem) => `${item.id}-${item.media_type}-${item
 
 export default function WatchlistScreen() {
   const { watchlist, removeFromWatchlist, reorderWatchlist } = useApp();
+  const { theme } = useTheme();
   const router = useRouter();
   const [dragMode, setDragMode] = useState(false);
+
+  // Provide safe fallbacks for optional theme color keys (TS types may not include warning/error)
+  const themeColorsAny = (theme.colors as any) ?? {};
+  const WARNING_COLOR = themeColorsAny.warning ?? '#FFD700';
+  const ERROR_COLOR = themeColorsAny.error ?? '#FF6B6B';
 
   // Local copy for optimistic updates
   const [localItems, setLocalItems] = useState<WatchlistItem[]>(watchlist);
@@ -168,8 +175,8 @@ export default function WatchlistScreen() {
       left: 16,
       right: 16,
       height: CARD_HEIGHT,
-      backgroundColor: 'rgba(0, 212, 255, 0.1)',
-      borderColor: 'rgba(0, 212, 255, 0.3)',
+      backgroundColor: theme.colors.primary + '10', // 10% opacity via 8-digit hex
+      borderColor: theme.colors.primary + '30', // 30% opacity
       borderWidth: 1,
       borderRadius: 16,
       borderStyle: 'dashed',
@@ -180,11 +187,11 @@ export default function WatchlistScreen() {
 
   if (!watchlist || watchlist.length === 0) {
     return (
-      <GestureHandlerRootView style={styles.container}>
+      <GestureHandlerRootView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.emptyContainer}>
-          <Ionicons name="bookmark-outline" size={80} color="#333" />
-          <Text style={styles.emptyTitle}>Your Watchlist is Empty</Text>
-          <Text style={styles.emptyText}>
+          <Ionicons name="bookmark-outline" size={80} color={theme.colors.border} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>Your Watchlist is Empty</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.secondary }]}>
             Search for movies and TV shows to add them to your watchlist
           </Text>
         </View>
@@ -193,26 +200,32 @@ export default function WatchlistScreen() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <View style={styles.header}>
+    <GestureHandlerRootView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>My Watchlist</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>My Watchlist</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.primary }]}>
             {watchlist.length} {watchlist.length === 1 ? 'item' : 'items'}
             {dragMode && ' • Drag to reorder'}
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.dragModeButton, dragMode && styles.dragModeButtonActive]}
+          style={[
+            styles.dragModeButton,
+            {
+              backgroundColor: dragMode ? theme.colors.primary : (theme.dark ? 'rgba(0,0,0,0)' : theme.colors.card),
+              borderColor: theme.colors.primary
+            }
+          ]}
           onPress={() => setDragMode(!dragMode)}
         >
           <Ionicons
             name={dragMode ? 'checkmark' : 'move'}
             size={20}
-            color={dragMode ? '#0A0A0A' : '#00D4FF'}
+            color={dragMode ? theme.colors.background : theme.colors.primary}
           />
-          <Text style={[styles.dragModeText, dragMode && styles.dragModeTextActive]}>
+          <Text style={[styles.dragModeText, { color: dragMode ? theme.colors.background : theme.colors.primary }]}>
             {dragMode ? 'Done' : 'Reorder'}
           </Text>
         </TouchableOpacity>
@@ -251,6 +264,7 @@ export default function WatchlistScreen() {
             onHapticStart={triggerHapticStart}
             onHapticMove={triggerHapticMove}
             onHapticEnd={triggerHapticEnd}
+            // pass down fallback colors in case child uses them (keeps behavior identical)
           />
         ))}
       </Animated.ScrollView>
@@ -297,11 +311,16 @@ function SortableItem({
   onHapticMove,
   onHapticEnd,
 }: SortableItemProps) {
+  const { theme } = useTheme();
+  const themeColorsAny = (theme.colors as any) ?? {};
+  const WARNING_COLOR = themeColorsAny.warning ?? '#FFD700';
+  const ERROR_COLOR = themeColorsAny.error ?? '#FF6B6B';
+
   const id = getItemId(item);
   const isDragging = useSharedValue(false);
   const zIndex = useSharedValue(0);
   const scale = useSharedValue(1);
-  
+
   const dragTranslationY = useSharedValue(0);
   const startTop = useSharedValue(0);
   const lastSwapIndex = useSharedValue(-1);
@@ -338,10 +357,10 @@ function SortableItem({
 
       if (clampedIndex !== oldIndex) {
         const newPositions = { ...positions.value };
-        
+
         for (const key in newPositions) {
           const currentIndex = newPositions[key];
-          
+
           if (key === id) {
             newPositions[key] = clampedIndex;
             continue;
@@ -359,7 +378,7 @@ function SortableItem({
         }
 
         positions.value = newPositions;
-        
+
         if (clampedIndex !== lastSwapIndex.value) {
           runOnJS(onHapticMove)();
           lastSwapIndex.value = clampedIndex;
@@ -390,7 +409,7 @@ function SortableItem({
       globalIsDragging.value = true;
       zIndex.value = 100;
       scale.value = withSpring(1.05, SPRING_CONFIG);
-      
+
       startTop.value = currentPos * ITEM_HEIGHT;
       dragTranslationY.value = 0;
       autoScrollAccumulator.value = 0;
@@ -417,10 +436,10 @@ function SortableItem({
 
       if (clampedIndex !== oldIndex) {
         const newPositions = { ...positions.value };
-        
+
         for (const key in newPositions) {
           const currentIndex = newPositions[key];
-          
+
           if (key === id) {
             newPositions[key] = clampedIndex;
             continue;
@@ -438,7 +457,7 @@ function SortableItem({
         }
 
         positions.value = newPositions;
-        
+
         if (clampedIndex !== lastSwapIndex.value) {
           runOnJS(onHapticMove)();
           lastSwapIndex.value = clampedIndex;
@@ -494,9 +513,9 @@ function SortableItem({
 
   const cardStyle = useAnimatedStyle(() => {
     return {
-      borderColor: isDragging.value ? '#00D4FF' : '#252525',
+      borderColor: isDragging.value ? theme.colors.primary : theme.colors.border,
       borderWidth: isDragging.value ? 2 : 1,
-      backgroundColor: isDragging.value ? '#252525' : '#1A1A1A',
+      backgroundColor: isDragging.value ? theme.colors.card : theme.colors.card,
       shadowOpacity: withSpring(isDragging.value ? 0.6 : 0.3),
       shadowRadius: withSpring(isDragging.value ? 20 : 6),
       elevation: isDragging.value ? 8 : 3,
@@ -520,33 +539,33 @@ function SortableItem({
                 ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
                 : '',
             }}
-            style={styles.poster}
+            style={[styles.poster, { backgroundColor: theme.colors.card }]}
             type="poster"
           />
 
           <View style={styles.movieInfo}>
-            <Text style={styles.movieTitle} numberOfLines={2}>
+            <Text style={[styles.movieTitle, { color: theme.colors.text }]} numberOfLines={2}>
               {item.title || item.name}
             </Text>
 
             <View style={styles.movieDetails}>
-              <View style={styles.typeBadge}>
-                <Text style={styles.movieType}>
+              <View style={[styles.typeBadge, { backgroundColor: theme.colors.primary + '10', borderColor: theme.colors.primary + '30' }]}>
+                <Text style={[styles.movieType, { color: theme.colors.primary }]}>
                   {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
                 </Text>
               </View>
 
-              <Text style={styles.movieYear}>
+              <Text style={[styles.movieYear, { color: theme.colors.secondary }]}>
                 {item.release_date
                   ? new Date(item.release_date).getFullYear()
                   : item.first_air_date
-                  ? new Date(item.first_air_date).getFullYear()
-                  : 'N/A'}
+                    ? new Date(item.first_air_date).getFullYear()
+                    : 'N/A'}
               </Text>
 
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.rating}>
+              <View style={[styles.ratingBadge, { backgroundColor: WARNING_COLOR + '10', borderColor: WARNING_COLOR + '30' }]}>
+                <Ionicons name="star" size={12} color={WARNING_COLOR} />
+                <Text style={[styles.rating, { color: WARNING_COLOR }]}>
                   {item.vote_average?.toFixed(1)}
                 </Text>
               </View>
@@ -557,8 +576,8 @@ function SortableItem({
         <View style={styles.actions}>
           {dragMode ? (
             <GestureDetector gesture={panGesture}>
-              <View style={styles.dragHandle}>
-                <Ionicons name="reorder-three" size={28} color="#00D4FF" />
+              <View style={[styles.dragHandle, { backgroundColor: theme.colors.primary + '10', borderColor: theme.colors.primary + '30' }]}>
+                <Ionicons name="reorder-three" size={28} color={theme.colors.primary} />
               </View>
             </GestureDetector>
           ) : (
@@ -568,7 +587,7 @@ function SortableItem({
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityLabel="Remove from watchlist"
             >
-              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+              <Ionicons name="trash-outline" size={20} color={ERROR_COLOR} />
             </TouchableOpacity>
           )}
         </View>
@@ -580,7 +599,7 @@ function SortableItem({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    // backgroundColor applied inline via theme
   },
   header: {
     flexDirection: 'row',
@@ -588,9 +607,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     paddingTop: 60,
-    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
     zIndex: 10,
   },
   headerLeft: {
@@ -599,12 +616,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#00D4FF',
     fontWeight: '600',
   },
   dragModeButton: {
@@ -614,28 +629,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.3)',
-  },
-  dragModeButtonActive: {
-    backgroundColor: '#00D4FF',
-    borderColor: '#00D4FF',
   },
   dragModeText: {
-    color: '#00D4FF',
     fontSize: 14,
     fontWeight: '700',
-  },
-  dragModeTextActive: {
-    color: '#0A0A0A',
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
   },
   movieCard: {
-    backgroundColor: '#1A1A1A',
     borderRadius: 16,
     height: CARD_HEIGHT,
     flexDirection: 'row',
@@ -652,7 +656,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 90,
     borderRadius: 10,
-    backgroundColor: '#252525',
   },
   movieInfo: {
     flex: 1,
@@ -660,7 +663,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   movieTitle: {
-    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
     marginBottom: 8,
@@ -673,20 +675,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeBadge: {
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.3)',
   },
   movieType: {
-    color: '#00D4FF',
     fontSize: 12,
     fontWeight: '600',
   },
   movieYear: {
-    color: '#888',
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 8,
@@ -694,17 +692,14 @@ const styles = StyleSheet.create({
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
     gap: 4,
     marginLeft: 8,
   },
   rating: {
-    color: '#FFD700',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -723,21 +718,17 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     padding: 10,
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.2)',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A0A',
     padding: 40,
     paddingBottom: 100,
   },
   emptyTitle: {
-    color: '#FFFFFF',
     fontSize: 24,
     fontWeight: '700',
     marginTop: 20,
@@ -745,7 +736,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyText: {
-    color: '#888',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,

@@ -1,17 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    FlatList,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useApp } from '../contexts/AppContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { tmdbService } from '../services/tmdb';
 import { TMDBMovie, TMDBSearchResult } from '../types/tmdb';
 import { ImageWithFallback } from './ImageWithFallback';
@@ -25,6 +26,7 @@ interface Props {
 }
 
 const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'movie', onBack }) => {
+  const { theme } = useTheme();
   const [movie, setMovie] = useState<TMDBMovie | null>(null);
   const [loading, setLoading] = useState(true);
   const { addToWatchlist, removeFromWatchlist, watchlist } = useApp();
@@ -36,7 +38,7 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
       setLoading(true);
       const details = await tmdbService.getMovieDetails(movieId, mediaType);
       setMovie(details as TMDBMovie);
-      
+
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 400,
@@ -85,40 +87,40 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
     <View style={styles.castMember}>
       <ImageWithFallback
         source={{ uri: item.profile_path ? `https://image.tmdb.org/t/p/w200${item.profile_path}` : '' }}
-        style={styles.castImage}
+        style={[styles.castImage, { backgroundColor: theme.colors.card }]}
         type="cast"
       />
-      <Text style={styles.castName} numberOfLines={1}>
+      <Text style={[styles.castName, { color: theme.colors.text }]} numberOfLines={1}>
         {item.name}
       </Text>
-      <Text style={styles.castCharacter} numberOfLines={1}>
+      <Text style={[styles.castCharacter, { color: theme.colors.secondary }]} numberOfLines={1}>
         {item.character}
       </Text>
     </View>
   ));
 
   const GenreItem = memo(({ genre }: { genre: any }) => (
-    <View style={styles.genre}>
-      <Text style={styles.genreText}>{genre.name}</Text>
+    <View style={[styles.genre, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+      <Text style={[styles.genreText, { color: theme.colors.primary }]}>{genre.name}</Text>
     </View>
   ));
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D4FF" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   if (!movie) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Movie not found</Text>
+      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
+        <Text style={[styles.errorText, { color: theme.colors.text }]}>Movie not found</Text>
         {onBack && (
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-            <Text style={styles.backText}>Go Back</Text>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            <Text style={[styles.backText, { color: theme.colors.text }]}>Go Back</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -126,51 +128,55 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
   }
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim, backgroundColor: theme.colors.background }]}>
       {onBack && (
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={onBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={28} color="#fff" />
+          <Ionicons name="chevron-back" size={28} color={theme.colors.text} />
         </TouchableOpacity>
       )}
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.posterContainer}>
           <ImageWithFallback
             source={{ uri: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '' }}
-            style={styles.poster}
+            style={[styles.poster, { backgroundColor: theme.colors.card }]}
             type="poster"
           />
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.title}>{movie.title || movie.name}</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{movie.title || movie.name}</Text>
 
           <View style={styles.metaInfo}>
-            <Text style={styles.year}>
+            <Text style={[styles.year, { color: theme.colors.primary }]}>
               {movie.release_date ? new Date(movie.release_date).getFullYear() :
-               movie.first_air_date ? new Date(movie.first_air_date).getFullYear() : 'N/A'}
+                movie.first_air_date ? new Date(movie.first_air_date).getFullYear() : 'N/A'}
             </Text>
-            <Text style={styles.dot}>•</Text>
-            <Text style={styles.runtime}>
+            <Text style={[styles.dot, { color: theme.colors.border }]}>•</Text>
+            <Text style={[styles.runtime, { color: theme.colors.secondary }]}>
               {movie.runtime ? `${movie.runtime} min` :
-               movie.episode_run_time?.[0] ? `${movie.episode_run_time[0]} min` : 'N/A'}
+                movie.episode_run_time?.[0] ? `${movie.episode_run_time[0]} min` : 'N/A'}
             </Text>
-            <Text style={styles.dot}>•</Text>
+            <Text style={[styles.dot, { color: theme.colors.border }]}>•</Text>
             <Text style={styles.rating}>
               ⭐ {movie.vote_average?.toFixed(1)}
             </Text>
           </View>
 
           <TouchableOpacity
-            style={[styles.watchlistButton, isInWatchlist && styles.inWatchlist]}
+            style={[
+              styles.watchlistButton,
+              { backgroundColor: theme.colors.primary },
+              isInWatchlist && { backgroundColor: theme.colors.card, borderWidth: 2, borderColor: theme.colors.primary }
+            ]}
             onPress={handleWatchlistToggle}
             activeOpacity={0.8}
           >
@@ -179,16 +185,16 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
               size={20}
               color="#fff"
             />
-            <Text style={styles.watchlistText}>
+            <Text style={[styles.watchlistText, { color: '#fff' }]}>
               {isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.overview}>{movie.overview}</Text>
+          <Text style={[styles.overview, { color: theme.colors.secondary }]}>{movie.overview}</Text>
 
           {movie.genres && movie.genres.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Genres</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Genres</Text>
               <View style={styles.genres}>
                 {movie.genres.map((genre) => (
                   <GenreItem key={genre.id} genre={genre} />
@@ -199,7 +205,7 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
 
           {movie.credits?.cast && movie.credits.cast.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Cast</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Cast</Text>
               <FlatList
                 horizontal
                 data={movie.credits.cast.slice(0, 12)}
@@ -215,14 +221,14 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
 
           {movie.images?.backdrops && movie.images.backdrops.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Gallery</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Gallery</Text>
               <FlatList
                 horizontal
                 data={movie.images.backdrops.slice(0, 6)}
                 renderItem={({ item }) => (
                   <ImageWithFallback
                     source={{ uri: `https://image.tmdb.org/t/p/w500${item.file_path}` }}
-                    style={styles.backdropImage}
+                    style={[styles.backdropImage, { backgroundColor: theme.colors.card }]}
                     type="backdrop"
                   />
                 )}
@@ -244,23 +250,19 @@ export const MovieDetailsScreen = memo(MovieDetailsScreenComponent);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A0A',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A0A',
     padding: 20,
   },
   errorText: {
-    color: '#fff',
     fontSize: 18,
     marginBottom: 20,
     fontFamily: 'System',
@@ -278,7 +280,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backText: {
-    color: '#fff',
     marginLeft: 8,
     fontFamily: 'System',
     fontWeight: '600',
@@ -309,7 +310,6 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   title: {
-    color: '#FFFFFF',
     fontSize: 32,
     fontWeight: '700',
     marginBottom: 16,
@@ -325,19 +325,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   year: {
-    color: '#00D4FF',
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
   },
   dot: {
-    color: '#666',
     marginHorizontal: 8,
     fontSize: 16,
     fontWeight: '600',
   },
   runtime: {
-    color: '#CCCCCC',
     fontSize: 16,
     fontWeight: '500',
     fontFamily: 'System',
@@ -350,7 +347,6 @@ const styles = StyleSheet.create({
   },
   watchlistButton: {
     flexDirection: 'row',
-    backgroundColor: '#00D4FF',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -363,20 +359,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  inWatchlist: {
-    backgroundColor: '#1A1A1A',
-    borderWidth: 2,
-    borderColor: '#00D4FF',
-  },
   watchlistText: {
-    color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
     marginLeft: 10,
     fontFamily: 'System',
   },
   overview: {
-    color: '#CCCCCC',
     fontSize: 16,
     lineHeight: 24,
     marginBottom: 32,
@@ -388,7 +377,6 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    color: '#FFFFFF',
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 16,
@@ -401,15 +389,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   genre: {
-    backgroundColor: '#1A1A1A',
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#333',
   },
   genreText: {
-    color: '#00D4FF',
     fontSize: 14,
     fontWeight: '600',
     fontFamily: 'System',
@@ -424,17 +409,14 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     marginBottom: 8,
-    backgroundColor: '#1A1A1A',
   },
   castName: {
-    color: '#FFFFFF',
     fontSize: 12,
     textAlign: 'center',
     fontWeight: '600',
     fontFamily: 'System',
   },
   castCharacter: {
-    color: '#888',
     fontSize: 11,
     textAlign: 'center',
     marginTop: 2,
@@ -446,6 +428,5 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     marginRight: 12,
-    backgroundColor: '#1A1A1A',
   },
 });
