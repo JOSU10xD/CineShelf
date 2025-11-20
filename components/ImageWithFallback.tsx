@@ -8,57 +8,55 @@ interface ImageWithFallbackProps {
   type?: 'poster' | 'cast' | 'backdrop';
 }
 
-export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({ 
-  source, 
-  style, 
-  type = 'poster' 
+export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
+  source,
+  style,
+  type = 'poster',
 }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  
-  if (imageError || !source.uri) {
-    const getIconSize = () => {
-      switch (type) {
-        case 'cast': return 20;
-        case 'backdrop': return 32;
-        default: return 40;
-      }
-    };
 
-    const getIconName = () => {
-      switch (type) {
-        case 'cast': return 'person-outline';
-        default: return 'film-outline';
-      }
-    };
+  const getIconSize = () => {
+    switch (type) {
+      case 'cast':
+        return 20;
+      case 'backdrop':
+        return 32;
+      default:
+        return 40;
+    }
+  };
 
+  const getIconName = () => {
+    switch (type) {
+      case 'cast':
+        return 'person-outline';
+      default:
+        return 'film-outline';
+    }
+  };
+
+  if (imageError || !source?.uri) {
     return (
       <View style={[style, styles.placeholder]}>
-        <Ionicons 
-          name={getIconName()} 
-          size={getIconSize()} 
-          color="#333" 
-        />
+        <Ionicons name={getIconName()} size={getIconSize()} color="#333" />
       </View>
     );
   }
-  
+
   return (
-    <View style={style}>
+    <View style={[style, styles.container]}>
       <Image
         source={source}
         style={[style, !imageLoaded && styles.hidden]}
         onError={() => setImageError(true)}
         onLoad={() => setImageLoaded(true)}
         fadeDuration={300}
+        resizeMode="cover"
       />
       {!imageLoaded && (
         <View style={[style, styles.loadingPlaceholder]}>
-          <Ionicons 
-            name="image-outline" 
-            size={type === 'cast' ? 20 : 32} 
-            color="#333" 
-          />
+          <Ionicons name="image-outline" size={getIconSize()} color="#333" />
         </View>
       )}
     </View>
@@ -66,6 +64,9 @@ export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
 };
 
 const styles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+  },
   placeholder: {
     backgroundColor: '#1A1A1A',
     justifyContent: 'center',

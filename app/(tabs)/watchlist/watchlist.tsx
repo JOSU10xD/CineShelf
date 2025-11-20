@@ -1,143 +1,181 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Dimensions,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
-import DraggableFlatList, {
-  RenderItemParams,
-  ScaleDecorator,
-} from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  scrollTo,
+  SharedValue,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
 import { TMDBSearchResult } from '../../../types/tmdb';
 
+// --- Constants & Types ---
+
 type WatchlistItem = TMDBSearchResult & { addedAt: string };
+
+const CARD_HEIGHT = 130;
+const MARGIN_BOTTOM = 12;
+const ITEM_HEIGHT = CARD_HEIGHT + MARGIN_BOTTOM;
+
+// Tuning values for UX
+const SCROLL_EDGE_THRESHOLD = 100; // px from edge to start scrolling
+const SCROLL_STEP = 10; // px per frame
+const LONG_PRESS_DELAY = 200; // ms
+const SPRING_CONFIG = { damping: 20, stiffness: 150 }; // Snappy but smooth
+
+// Helper to generate a stable ID
+const getItemId = (item: WatchlistItem) => `${item.id}-${item.media_type}-${item.addedAt}`;
+
+// --- Components ---
 
 export default function WatchlistScreen() {
   const { watchlist, removeFromWatchlist, reorderWatchlist } = useApp();
   const router = useRouter();
-  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState(false);
 
-  const handleRemove = useCallback((id: number, mediaType: string, title: string) => {
-    removeFromWatchlist(id, mediaType);
-  }, [removeFromWatchlist]);
+  // Local copy for optimistic updates
+  const [localItems, setLocalItems] = useState<WatchlistItem[]>(watchlist);
 
-  const handleMoviePress = useCallback((movie: WatchlistItem) => {
-    if (isDragging) return;
+  useEffect(() => {
+    setLocalItems(watchlist);
+  }, [watchlist]);
 
-    router.push({
-      pathname: '/watchlist/movie-details',
-      params: { id: String(movie.id), type: movie.media_type }
-    } as any);
-  }, [isDragging, router]);
+  // Shared values
+  const scrollY = useSharedValue(0);
+  const scrollViewRef = useAnimatedRef<Animated.ScrollView>();
+  const positions = useSharedValue<Record<string, number>>({});
+  const containerHeight = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+  const autoScrollDirection = useSharedValue(0);
+  const activeDropIndex = useSharedValue(-1); // For visual placeholder
 
-  const handleDragBegin = useCallback(() => {
-    setIsDragging(true);
+  // Initialize positions
+  useEffect(() => {
+    const newPositions: Record<string, number> = {};
+    localItems.forEach((item, index) => {
+      newPositions[getItemId(item)] = index;
+    });
+    positions.value = newPositions;
+    contentHeight.value = localItems.length * ITEM_HEIGHT;
+  }, [localItems, positions, contentHeight]);
 
-    if (Platform.OS !== 'web') {
-      try {
-        const Haptics = require('expo-haptics');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch (error) {
-        console.log('Haptics not available');
+  // Auto-scroll loop
+  useFrameCallback(() => {
+    if (autoScrollDirection.value !== 0 && isDragging.value) {
+      const scrollChange = autoScrollDirection.value * SCROLL_STEP;
+      const targetScroll = scrollY.value + scrollChange;
+      const maxScroll = contentHeight.value - containerHeight.value + 150;
+      const clampedScroll = Math.max(0, Math.min(maxScroll, targetScroll));
+
+      if (Math.abs(scrollY.value - clampedScroll) > 0.1) {
+        scrollTo(scrollViewRef, 0, clampedScroll, false);
       }
+    }
+  });
+
+  const handleRemove = useCallback(
+    (id: number, mediaType: string) => {
+      removeFromWatchlist(id, mediaType);
+    },
+    [removeFromWatchlist]
+  );
+
+  const handleMoviePress = useCallback(
+    (movie: WatchlistItem) => {
+      if (isDragging.value) return;
+      router.push({
+        pathname: '/watchlist/movie-details',
+        params: { id: String(movie.id), type: movie.media_type },
+      } as any);
+    },
+    [router, isDragging]
+  );
+
+  const handleReorderComplete = useCallback((finalPositions: Record<string, number>) => {
+    const newOrder = [...localItems].sort((a, b) => {
+      const indexA = finalPositions[getItemId(a)];
+      const indexB = finalPositions[getItemId(b)];
+      return indexA - indexB;
+    });
+    setLocalItems(newOrder);
+    reorderWatchlist(newOrder);
+  }, [localItems, reorderWatchlist]);
+
+  // Haptic wrappers
+  const triggerHapticStart = useCallback(() => {
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      // Ignore haptic errors
     }
   }, []);
 
-  const handleDragEnd = useCallback(({ data }: { data: WatchlistItem[] }) => {
-    setIsDragging(false);
-    reorderWatchlist(data);
-
-    if (Platform.OS !== 'web') {
-      try {
-        const Haptics = require('expo-haptics');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch (error) {
-        console.log('Haptics not available');
-      }
+  const triggerHapticMove = useCallback(() => {
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {
+      // Ignore haptic errors
     }
-  }, [reorderWatchlist]);
+  }, []);
 
-  const renderMovie = useCallback(({ item, drag, isActive }: RenderItemParams<WatchlistItem>) => {
-    return (
-      <ScaleDecorator>
-        <View
-          style={[
-            styles.movieCard,
-            isActive && styles.dragging,
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.cardContent}
-            onPress={() => !isActive && handleMoviePress(item)}
-            activeOpacity={0.7}
-            disabled={isActive}
-          >
-            <ImageWithFallback
-              source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-              style={styles.poster}
-              type="poster"
-            />
+  const triggerHapticEnd = useCallback(() => {
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Success);
+    } catch (e) {
+      // Ignore haptic errors
+    }
+  }, []);
 
-            <View style={styles.movieInfo}>
-              <Text style={styles.movieTitle} numberOfLines={2}>
-                {item.title || item.name}
-              </Text>
-              <View style={styles.movieDetails}>
-                <View style={styles.typeBadge}>
-                  <Text style={styles.movieType}>
-                    {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
-                  </Text>
-                </View>
-                <Text style={styles.movieYear}>
-                  {item.release_date ? new Date(item.release_date).getFullYear() :
-                   item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
-                </Text>
-                <View style={styles.ratingBadge}>
-                  <Ionicons name="star" size={12} color="#FFD700" />
-                  <Text style={styles.rating}>{item.vote_average?.toFixed(1)}</Text>
-                </View>
-              </View>
-            </View>
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+    containerHeight.value = event.layoutMeasurement.height;
+  });
 
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.removeButton]}
-                onPress={() => handleRemove(item.id, item.media_type, item.title || item.name || '')}
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-              >
-                <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
-              </TouchableOpacity>
+  // Placeholder style
+  const placeholderStyle = useAnimatedStyle(() => {
+    return {
+      position: 'absolute',
+      top: withSpring(activeDropIndex.value * ITEM_HEIGHT, SPRING_CONFIG),
+      left: 16,
+      right: 16,
+      height: CARD_HEIGHT,
+      backgroundColor: 'rgba(0, 212, 255, 0.1)',
+      borderColor: 'rgba(0, 212, 255, 0.3)',
+      borderWidth: 1,
+      borderRadius: 16,
+      borderStyle: 'dashed',
+      opacity: activeDropIndex.value >= 0 ? withTiming(1) : withTiming(0),
+      zIndex: -1, // Behind items
+    };
+  });
 
-              <TouchableOpacity
-                style={[styles.actionButton, styles.dragHandle]}
-                onLongPress={drag}
-                delayLongPress={100}
-                activeOpacity={0.6}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="reorder-three" size={26} color="#00D4FF" />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-
-          {isActive && <View style={styles.dragIndicator} />}
-        </View>
-      </ScaleDecorator>
-    );
-  }, [handleMoviePress, handleRemove]);
-
-  const keyExtractor = useCallback((item: WatchlistItem) =>
-    `${item.id}-${item.media_type}-${item.addedAt}`, []
-  );
-
-  if (watchlist.length === 0) {
+  if (!watchlist || watchlist.length === 0) {
     return (
       <GestureHandlerRootView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -154,29 +192,306 @@ export default function WatchlistScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Watchlist</Text>
-        <Text style={styles.subtitle}>
-          {watchlist.length} {watchlist.length === 1 ? 'item' : 'items'}
-          {isDragging && ' • Reordering...'}
-        </Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>My Watchlist</Text>
+          <Text style={styles.subtitle}>
+            {watchlist.length} {watchlist.length === 1 ? 'item' : 'items'}
+            {dragMode && ' • Drag to reorder'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.dragModeButton, dragMode && styles.dragModeButtonActive]}
+          onPress={() => setDragMode(!dragMode)}
+        >
+          <Ionicons
+            name={dragMode ? 'checkmark' : 'move'}
+            size={20}
+            color={dragMode ? '#0A0A0A' : '#00D4FF'}
+          />
+          <Text style={[styles.dragModeText, dragMode && styles.dragModeTextActive]}>
+            {dragMode ? 'Done' : 'Reorder'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <DraggableFlatList
-        data={watchlist}
-        renderItem={renderMovie}
-        keyExtractor={keyExtractor}
-        onDragBegin={handleDragBegin}
-        onDragEnd={handleDragEnd}
-        activationDistance={8}
-        containerStyle={styles.listContainer}
-        contentContainerStyle={styles.listContent}
+      <Animated.ScrollView
+        ref={scrollViewRef}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { height: Math.max(localItems.length * ITEM_HEIGHT + 120, Dimensions.get('window').height) }
+        ]}
         showsVerticalScrollIndicator={false}
-        autoscrollThreshold={120}
-        autoscrollSpeed={300}
-        dragItemOverflow={true}
-        scrollEnabled={!isDragging}
-      />
+        scrollEnabled={!isDragging.value}
+      >
+        {/* Visual Placeholder */}
+        <Animated.View style={placeholderStyle} />
+
+        {localItems.map((item) => (
+          <SortableItem
+            key={getItemId(item)}
+            item={item}
+            positions={positions}
+            scrollY={scrollY}
+            containerHeight={containerHeight}
+            itemsCount={localItems.length}
+            dragMode={dragMode}
+            onPress={handleMoviePress}
+            onRemove={handleRemove}
+            onReorderComplete={handleReorderComplete}
+            globalIsDragging={isDragging}
+            autoScrollDirection={autoScrollDirection}
+            activeDropIndex={activeDropIndex}
+            onHapticStart={triggerHapticStart}
+            onHapticMove={triggerHapticMove}
+            onHapticEnd={triggerHapticEnd}
+          />
+        ))}
+      </Animated.ScrollView>
     </GestureHandlerRootView>
+  );
+}
+
+// --- Sortable Item Component ---
+
+interface SortableItemProps {
+  item: WatchlistItem;
+  positions: SharedValue<Record<string, number>>;
+  scrollY: SharedValue<number>;
+  containerHeight: SharedValue<number>;
+  itemsCount: number;
+  dragMode: boolean;
+  onPress: (item: WatchlistItem) => void;
+  onRemove: (id: number, mediaType: string) => void;
+  onReorderComplete: (positions: Record<string, number>) => void;
+  globalIsDragging: SharedValue<boolean>;
+  autoScrollDirection: SharedValue<number>;
+  activeDropIndex: SharedValue<number>;
+  onHapticStart: () => void;
+  onHapticMove: () => void;
+  onHapticEnd: () => void;
+}
+
+function SortableItem({
+  item,
+  positions,
+  scrollY,
+  containerHeight,
+  itemsCount,
+  dragMode,
+  onPress,
+  onRemove,
+  onReorderComplete,
+  globalIsDragging,
+  autoScrollDirection,
+  activeDropIndex,
+  onHapticStart,
+  onHapticMove,
+  onHapticEnd,
+}: SortableItemProps) {
+  const id = getItemId(item);
+  const isDragging = useSharedValue(false);
+  const zIndex = useSharedValue(0);
+  const scale = useSharedValue(1);
+  
+  const dragTranslationY = useSharedValue(0);
+  const startTop = useSharedValue(0);
+
+  // Derived top position
+  const top = useDerivedValue(() => {
+    if (isDragging.value) {
+      return startTop.value + dragTranslationY.value;
+    }
+    const index = positions.value[id];
+    // Safety check for NaN
+    if (typeof index !== 'number') return 0;
+    return withSpring(index * ITEM_HEIGHT, SPRING_CONFIG);
+  }, [positions, id]);
+
+  const panGesture = Gesture.Pan()
+    .enabled(dragMode)
+    .activateAfterLongPress(LONG_PRESS_DELAY)
+    .onStart(() => {
+      // Safety check: ensure we have a valid position to start from
+      const currentPos = positions.value[id];
+      if (typeof currentPos !== 'number') return;
+
+      isDragging.value = true;
+      globalIsDragging.value = true;
+      zIndex.value = 100;
+      scale.value = withSpring(1.05, SPRING_CONFIG);
+      
+      startTop.value = currentPos * ITEM_HEIGHT;
+      dragTranslationY.value = 0;
+      activeDropIndex.value = currentPos;
+
+      runOnJS(onHapticStart)();
+    })
+    .onUpdate((event) => {
+      if (!isDragging.value) return;
+
+      dragTranslationY.value = event.translationY;
+
+      const currentAbsoluteY = startTop.value + event.translationY;
+      const centerOffset = currentAbsoluteY + CARD_HEIGHT / 2;
+      const newIndex = Math.floor(centerOffset / ITEM_HEIGHT);
+      const clampedIndex = Math.max(0, Math.min(itemsCount - 1, newIndex));
+
+      // Update visual placeholder
+      activeDropIndex.value = clampedIndex;
+
+      const oldIndex = positions.value[id];
+
+      if (clampedIndex !== oldIndex) {
+        const newPositions = { ...positions.value };
+        
+        for (const key in newPositions) {
+          const currentIndex = newPositions[key];
+          
+          if (key === id) {
+            newPositions[key] = clampedIndex;
+            continue;
+          }
+
+          if (oldIndex < clampedIndex) {
+            if (currentIndex > oldIndex && currentIndex <= clampedIndex) {
+              newPositions[key] = currentIndex - 1;
+            }
+          } else {
+            if (currentIndex >= clampedIndex && currentIndex < oldIndex) {
+              newPositions[key] = currentIndex + 1;
+            }
+          }
+        }
+
+        positions.value = newPositions;
+        runOnJS(onHapticMove)();
+      }
+
+      // Auto Scroll
+      const screenY = currentAbsoluteY - scrollY.value;
+      const lowerBound = containerHeight.value - SCROLL_EDGE_THRESHOLD;
+      const upperBound = SCROLL_EDGE_THRESHOLD;
+
+      if (screenY > lowerBound) {
+        autoScrollDirection.value = 1;
+      } else if (screenY < upperBound) {
+        autoScrollDirection.value = -1;
+      } else {
+        autoScrollDirection.value = 0;
+      }
+    })
+    .onFinalize(() => {
+      if (!isDragging.value) return;
+
+      isDragging.value = false;
+      globalIsDragging.value = false;
+      autoScrollDirection.value = 0;
+      activeDropIndex.value = -1; // Hide placeholder
+      zIndex.value = 0;
+      scale.value = withSpring(1, SPRING_CONFIG);
+      dragTranslationY.value = 0; 
+
+      runOnJS(onHapticEnd)();
+      runOnJS(onReorderComplete)(positions.value);
+    });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      position: 'absolute',
+      top: top.value,
+      left: 0,
+      right: 0,
+      height: CARD_HEIGHT,
+      zIndex: zIndex.value,
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  const cardStyle = useAnimatedStyle(() => {
+    return {
+      borderColor: isDragging.value ? '#00D4FF' : '#252525',
+      borderWidth: isDragging.value ? 2 : 1,
+      backgroundColor: isDragging.value ? '#252525' : '#1A1A1A',
+      shadowOpacity: withSpring(isDragging.value ? 0.6 : 0.3),
+      shadowRadius: withSpring(isDragging.value ? 20 : 6),
+      elevation: isDragging.value ? 8 : 3,
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Animated.View style={[styles.movieCard, cardStyle]}>
+        <Pressable
+          onPress={() => onPress(item)}
+          style={({ pressed }) => [
+            styles.cardContent,
+            pressed && !dragMode ? { opacity: 0.7 } : null,
+          ]}
+          disabled={dragMode}
+        >
+          <ImageWithFallback
+            source={{
+              uri: item.poster_path
+                ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
+                : '',
+            }}
+            style={styles.poster}
+            type="poster"
+          />
+
+          <View style={styles.movieInfo}>
+            <Text style={styles.movieTitle} numberOfLines={2}>
+              {item.title || item.name}
+            </Text>
+
+            <View style={styles.movieDetails}>
+              <View style={styles.typeBadge}>
+                <Text style={styles.movieType}>
+                  {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
+                </Text>
+              </View>
+
+              <Text style={styles.movieYear}>
+                {item.release_date
+                  ? new Date(item.release_date).getFullYear()
+                  : item.first_air_date
+                  ? new Date(item.first_air_date).getFullYear()
+                  : 'N/A'}
+              </Text>
+
+              <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={12} color="#FFD700" />
+                <Text style={styles.rating}>
+                  {item.vote_average?.toFixed(1)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Pressable>
+
+        <View style={styles.actions}>
+          {dragMode ? (
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.dragHandle}>
+                <Ionicons name="reorder-three" size={28} color="#00D4FF" />
+              </View>
+            </GestureDetector>
+          ) : (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.removeButton]}
+              onPress={() => onRemove(item.id, item.media_type)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Remove from watchlist"
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -186,11 +501,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0A0A',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 24,
     paddingTop: 60,
     backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
     borderBottomColor: '#1A1A1A',
+    zIndex: 10,
+  },
+  headerLeft: {
+    flex: 1,
   },
   title: {
     fontSize: 32,
@@ -203,38 +525,43 @@ const styles = StyleSheet.create({
     color: '#00D4FF',
     fontWeight: '600',
   },
-  listContainer: {
-    flex: 1,
+  dragModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.3)',
   },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
+  dragModeButtonActive: {
+    backgroundColor: '#00D4FF',
+    borderColor: '#00D4FF',
+  },
+  dragModeText: {
+    color: '#00D4FF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dragModeTextActive: {
+    color: '#0A0A0A',
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   movieCard: {
     backgroundColor: '#1A1A1A',
     borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#252525',
-    overflow: 'visible',
-  },
-  dragging: {
-    backgroundColor: '#252525',
-    shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 25,
-    borderColor: '#00D4FF',
-    borderWidth: 2,
-    zIndex: 1000,
+    height: CARD_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   cardContent: {
+    flex: 1,
     flexDirection: 'row',
     padding: 16,
     alignItems: 'center',
@@ -280,6 +607,7 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 14,
     fontWeight: '500',
+    marginLeft: 8,
   },
   ratingBadge: {
     flexDirection: 'row',
@@ -291,6 +619,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.3)',
     gap: 4,
+    marginLeft: 8,
   },
   rating: {
     color: '#FFD700',
@@ -300,27 +629,22 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    paddingRight: 16,
   },
   actionButton: {
-    padding: 8,
+    padding: 10,
     borderRadius: 8,
   },
   removeButton: {
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    paddingHorizontal: 12,
   },
   dragHandle: {
+    padding: 10,
     backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.3)',
-  },
-  dragIndicator: {
-    height: 3,
-    backgroundColor: '#00D4FF',
-    width: '100%',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
+    borderColor: 'rgba(0, 212, 255, 0.2)',
   },
   emptyContainer: {
     flex: 1,
