@@ -31,7 +31,6 @@ yarn.lock
 .env.*.local
 
 # If your TMDB key file must NOT be public:
-services/tmdb.ts
 
 # =========================================================
 # Testing / Coverage
