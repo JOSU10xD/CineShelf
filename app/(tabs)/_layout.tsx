@@ -130,7 +130,7 @@ export default function TabLayout() {
                 headerLeft: () => <MenuButton />,
             }}>
             <Tabs.Screen
-                name="index"
+                name="discover"
                 options={{
                     title: 'Discover',
                     tabBarIcon: ({ size, focused }) => (

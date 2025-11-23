@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "970685105498",
+    "project_id": "cineshelf-993ed",
+    "storage_bucket": "cineshelf-993ed.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:970685105498:android:7eb807004e12c5cc6d5f63",
+        "android_client_info": {
+          "package_name": "com.cineshelf"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "970685105498-73avu5b4c31qht439e8thrspn967up63.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cineshelf",
+            "certificate_hash": "5596a3dc5de222b46945b6d00cb72a0f849de97e"
+          }
+        },
+        {
+          "client_id": "970685105498-id2jkq3so1lpsbl2mbvt9ditl9njlht3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBkQGXzhuEyqF3CwJV7YxZXKjxOty44p0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "970685105498-id2jkq3so1lpsbl2mbvt9ditl9njlht3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

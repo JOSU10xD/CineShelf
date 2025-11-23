@@ -19,6 +19,7 @@ export interface Theme {
         tabBarInactive: string;
         headerBackground: string;
         headerText: string;
+        error: string;
     };
     dark: boolean;
 }
@@ -40,6 +41,7 @@ export const themes: Record<ThemeKey, Theme> = {
             tabBarInactive: '#8892B0',
             headerBackground: '#0A192F',
             headerText: '#F87060',
+            error: '#FF4444',
         },
     },
     theme2: {
@@ -58,6 +60,7 @@ export const themes: Record<ThemeKey, Theme> = {
             tabBarInactive: '#666666',
             headerBackground: '#050505',
             headerText: '#00D4FF',
+            error: '#FF4444',
         },
     },
     theme3: {
@@ -76,6 +79,7 @@ export const themes: Record<ThemeKey, Theme> = {
             tabBarInactive: '#555068',
             headerBackground: '#161420',
             headerText: '#928DAB',
+            error: '#FF4444',
         },
     },
     theme4: {
@@ -94,6 +98,7 @@ export const themes: Record<ThemeKey, Theme> = {
             tabBarInactive: '#9E8B85',
             headerBackground: '#FFF8F5',
             headerText: '#F75590',
+            error: '#FF4444',
         },
     },
 };

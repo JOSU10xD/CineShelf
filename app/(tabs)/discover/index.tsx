@@ -1,11 +1,29 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, InteractionManager, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { TMDBSearchResult } from '../../../../types/tmdb';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { tmdbService } from '../../../services/tmdb';
+
+// Memoized Tile Component
+const MovieTile = memo(({ item, onPress, theme }: { item: TMDBSearchResult, onPress: (item: TMDBSearchResult) => void, theme: any }) => (
+  <TouchableOpacity
+    style={styles.tile}
+    onPress={() => onPress(item)}
+    activeOpacity={0.85}
+  >
+    <View style={[styles.imageContainer, { shadowColor: theme.colors.text }]}>
+      <ImageWithFallback
+        source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
+        style={styles.tileImage}
+        type="poster"
+      />
+    </View>
+    <Text style={[styles.tileTitle, { color: theme.colors.text }]} numberOfLines={2}>{item.title || item.name}</Text>
+  </TouchableOpacity>
+));
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -17,8 +35,11 @@ export default function HomeScreen() {
   const [loadingPopular, setLoadingPopular] = useState(true);
 
   useEffect(() => {
-    loadTrending();
-    loadPopularAllTime();
+    // Use InteractionManager to delay heavy fetches until after transitions
+    InteractionManager.runAfterInteractions(() => {
+      loadTrending();
+      loadPopularAllTime();
+    });
   }, []);
 
   const loadTrending = async () => {
@@ -35,29 +56,24 @@ export default function HomeScreen() {
     setLoadingPopular(false);
   };
 
-  const openFromHome = (item: TMDBSearchResult) => {
+  const openFromHome = useCallback((item: TMDBSearchResult) => {
     router.push({
       pathname: './movie-details',
       params: { id: String(item.id), type: item.media_type }
     } as any);
-  };
+  }, [router]);
 
-  const renderTile = ({ item }: { item: TMDBSearchResult }) => (
-    <TouchableOpacity
-      style={styles.tile}
-      onPress={() => openFromHome(item)}
-      activeOpacity={0.85}
-    >
-      <View style={[styles.imageContainer, { shadowColor: theme.colors.text }]}>
-        <ImageWithFallback
-          source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-          style={styles.tileImage}
-          type="poster"
-        />
-      </View>
-      <Text style={[styles.tileTitle, { color: theme.colors.text }]} numberOfLines={2}>{item.title || item.name}</Text>
-    </TouchableOpacity>
-  );
+  const renderTile = useCallback(({ item }: { item: TMDBSearchResult }) => (
+    <MovieTile item={item} onPress={openFromHome} theme={theme} />
+  ), [openFromHome, theme]);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 156, // width + marginRight
+    offset: 156 * index,
+    index,
+  }), []);
+
+  const keyExtractor = useCallback((item: TMDBSearchResult) => `${item.id}-${item.media_type}`, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -71,10 +87,15 @@ export default function HomeScreen() {
             <FlatList
               data={trending}
               renderItem={renderTile}
-              keyExtractor={(item) => `${item.id}-${item.media_type}`}
+              keyExtractor={keyExtractor}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
+              getItemLayout={getItemLayout}
+              initialNumToRender={4}
+              maxToRenderPerBatch={6}
+              windowSize={5}
+              removeClippedSubviews={true}
             />
           )}
         </View>
@@ -87,10 +108,15 @@ export default function HomeScreen() {
             <FlatList
               data={popular}
               renderItem={renderTile}
-              keyExtractor={(item) => `${item.id}-${item.media_type}`}
+              keyExtractor={keyExtractor}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
+              getItemLayout={getItemLayout}
+              initialNumToRender={4}
+              maxToRenderPerBatch={6}
+              windowSize={5}
+              removeClippedSubviews={true}
             />
           )}
         </View>
