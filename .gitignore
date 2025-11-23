@@ -36,7 +36,6 @@ yarn.lock
 # Testing / Coverage
 # =========================================================
 coverage/
-services/firebase.js
 # =========================================================
 # OS / Temporary
 # =========================================================
@@ -51,3 +50,7 @@ Thumbs.db
 # @generated expo-cli sync
 expo-env.d.ts
 # @end expo-cli
+google-services(1).json
+google-services.json
+GoogleService-Info.plist
+services/firebase.js
