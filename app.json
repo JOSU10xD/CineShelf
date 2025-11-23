@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.josu10.cineshelf",
+      "bundleIdentifier": "com.cineshelf",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.josu10.cineshelf"
+      "package": "com.cineshelf"
     },
     "web": {
       "output": "static",

@@ -29,9 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-        clientId: '970685105498-id2jkq3so1lpsbl2mbvt9ditl9njlht3.apps.googleusercontent.com',
-        iosClientId: '970685105498-73avu5b4c31qht439e8thrspn967up63.apps.googleusercontent.com',
-        androidClientId: '970685105498-73avu5b4c31qht439e8thrspn967up63.apps.googleusercontent.com',
+        clientId: '683253241088-cjr7ahqm70ltt8hgrn1hmjb3iedeohpf.apps.googleusercontent.com',
+        iosClientId: '683253241088-cjr7ahqm70ltt8hgrn1hmjb3iedeohpf.apps.googleusercontent.com',
+        androidClientId: '683253241088-i51hgd7rtdnnk0irib8vqno7bs5pdj2v.apps.googleusercontent.com',
         redirectUri: makeRedirectUri({
             scheme: 'cineshelf'
         }),
