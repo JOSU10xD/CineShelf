@@ -1,14 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, InteractionManager, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { TMDBSearchResult } from '../../../../types/tmdb';
+import { ActivityIndicator, InteractionManager, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { tmdbService } from '../../../services/tmdb';
+import { recommendationApi } from '../../../services/recommendationApi';
 
 // Memoized Tile Component
-const MovieTile = memo(({ item, onPress, theme }: { item: TMDBSearchResult, onPress: (item: TMDBSearchResult) => void, theme: any }) => (
+const MovieTile = memo(({ item, onPress, theme }: { item: any, onPress: (item: any) => void, theme: any }) => (
   <TouchableOpacity
     style={styles.tile}
     onPress={() => onPress(item)}
@@ -22,6 +22,11 @@ const MovieTile = memo(({ item, onPress, theme }: { item: TMDBSearchResult, onPr
       />
     </View>
     <Text style={[styles.tileTitle, { color: theme.colors.text }]} numberOfLines={2}>{item.title || item.name}</Text>
+    {item.reason && (
+      <Text style={[styles.reasonText, { color: theme.colors.secondary }]} numberOfLines={2}>
+        {item.reason}
+      </Text>
+    )}
   </TouchableOpacity>
 ));
 
@@ -29,97 +34,103 @@ export default function HomeScreen() {
   const router = useRouter();
   const { watchlist } = useApp();
   const { theme } = useTheme();
-  const [trending, setTrending] = useState<TMDBSearchResult[]>([]);
-  const [popular, setPopular] = useState<TMDBSearchResult[]>([]);
-  const [loadingTrending, setLoadingTrending] = useState(true);
-  const [loadingPopular, setLoadingPopular] = useState(true);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Use InteractionManager to delay heavy fetches until after transitions
-    InteractionManager.runAfterInteractions(() => {
-      loadTrending();
-      loadPopularAllTime();
-    });
+  const loadRecommendations = useCallback(async (force = false) => {
+    try {
+      setError(null);
+      if (force) {
+        setRefreshing(true);
+        // We don't know the mode here easily without storing it in local state or fetching prefs.
+        // But the server recommend endpoint needs a mode.
+        // Actually, the plan says "Add Refresh recommendations button in UI to request POST /api/v1/recommend with forceRefresh=true".
+        // But we need to know if it's 'ai' or 'manual'.
+        // For now, let's assume 'ai' or try to fetch existing to see mode?
+        // The server GET returns the mode in the response.
+        // So we can GET first, see mode, then POST with that mode.
+
+        // Quick fix: Try to get current recs to find mode, if fail, default to 'ai' (or ask user).
+        // If we are refreshing, we likely have recs.
+        const current = await recommendationApi.getRecommendations();
+        if (current && current.mode) {
+          const newRecs = await recommendationApi.recommend(current.mode, true);
+          setRecommendations(newRecs.items);
+        } else {
+          // Fallback or re-onboard
+          const newRecs = await recommendationApi.recommend('ai', true); // Defaulting to AI
+          setRecommendations(newRecs.items);
+        }
+      } else {
+        setLoading(true);
+        const data = await recommendationApi.getRecommendations();
+        setRecommendations(data.items || []);
+      }
+    } catch (err) {
+      console.error('Load recs error:', err);
+      setError('Failed to load recommendations. Please check your connection or update your taste.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const loadTrending = async () => {
-    setLoadingTrending(true);
-    const t = await tmdbService.getTrendingNow();
-    setTrending(t);
-    setLoadingTrending(false);
-  };
+  useEffect(() => {
+    InteractionManager.runAfterInteractions(() => {
+      loadRecommendations();
+    });
+  }, [loadRecommendations]);
 
-  const loadPopularAllTime = async () => {
-    setLoadingPopular(true);
-    const p = await tmdbService.getPopularAllTime();
-    setPopular(p);
-    setLoadingPopular(false);
-  };
-
-  const openFromHome = useCallback((item: TMDBSearchResult) => {
+  const openFromHome = useCallback((item: any) => {
     router.push({
       pathname: `/movie/${item.id}`,
-      params: { type: item.media_type }
+      params: { type: 'movie' } // Recommendations are currently movies
     } as any);
   }, [router]);
 
-  const renderTile = useCallback(({ item }: { item: TMDBSearchResult }) => (
+  const renderTile = useCallback(({ item }: { item: any }) => (
     <MovieTile item={item} onPress={openFromHome} theme={theme} />
   ), [openFromHome, theme]);
 
-  const getItemLayout = useCallback((data: any, index: number) => ({
-    length: 156, // width + marginRight
-    offset: 156 * index,
-    index,
-  }), []);
-
-  const keyExtractor = useCallback((item: TMDBSearchResult) => `${item.id}-${item.media_type}`, []);
+  const keyExtractor = useCallback((item: any) => `${item.id}`, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => loadRecommendations(true)} tintColor={theme.colors.primary} />
+        }
+      >
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Trending Now</Text>
-          {loadingTrending ? (
-            <ActivityIndicator color={theme.colors.primary} size="large" />
-          ) : (
-            <FlatList
-              data={trending}
-              renderItem={renderTile}
-              keyExtractor={keyExtractor}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
-              getItemLayout={getItemLayout}
-              initialNumToRender={4}
-              maxToRenderPerBatch={6}
-              windowSize={5}
-              removeClippedSubviews={true}
-            />
-          )}
+        <View style={styles.header}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recommended for You</Text>
+          <TouchableOpacity onPress={() => loadRecommendations(true)} style={styles.refreshButton}>
+            <Ionicons name="refresh" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>All Time Popular</Text>
-          {loadingPopular ? (
-            <ActivityIndicator color={theme.colors.primary} size="large" />
-          ) : (
-            <FlatList
-              data={popular}
-              renderItem={renderTile}
-              keyExtractor={keyExtractor}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 20, paddingRight: 8 }}
-              getItemLayout={getItemLayout}
-              initialNumToRender={4}
-              maxToRenderPerBatch={6}
-              windowSize={5}
-              removeClippedSubviews={true}
-            />
-          )}
-        </View>
+        {loading ? (
+          <ActivityIndicator color={theme.colors.primary} size="large" style={{ marginTop: 50 }} />
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={{ color: theme.colors.error, marginBottom: 16 }}>{error}</Text>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/profile-setup', params: { initialStep: 'taste' } } as any)} style={[styles.button, { backgroundColor: theme.colors.primary }]}>
+              <Text style={{ color: '#fff' }}>Update Taste</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {recommendations.map(item => (
+              <View key={item.id} style={{ marginBottom: 24 }}>
+                <MovieTile item={item} onPress={openFromHome} theme={theme} />
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={[styles.stats, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <View style={styles.statItem}>
@@ -134,25 +145,31 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  section: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 32,
+    paddingRight: 20,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     marginBottom: 16,
     paddingLeft: 20,
     fontFamily: 'System',
     letterSpacing: 0.5,
   },
+  refreshButton: {
+    padding: 8,
+  },
   tile: {
-    width: 140,
-    marginRight: 16,
+    width: 160,
     alignItems: 'center',
   },
   imageContainer: {
-    width: 140,
-    height: 210,
+    width: 160,
+    height: 240,
     borderRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -167,11 +184,18 @@ const styles = StyleSheet.create({
   },
   tileTitle: {
     marginTop: 4,
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
     fontWeight: '600',
     fontFamily: 'System',
     paddingHorizontal: 4,
+  },
+  reasonText: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 4,
+    fontStyle: 'italic'
   },
   stats: {
     margin: 20,
@@ -193,4 +217,19 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     fontWeight: '600',
   },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 10,
+  },
+  center: {
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  button: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  }
 });

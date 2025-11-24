@@ -29,7 +29,7 @@ function RootLayoutNav() {
             router.replace('/auth' as any);
         } else if (user && !profile && !inProfileSetup) {
             router.replace('/profile-setup' as any);
-        } else if (user && profile && (inAuthGroup || inProfileSetup)) {
+        } else if (user && profile && inAuthGroup) {
             router.replace('/(tabs)/discover' as any);
         }
     }, [user, profile, splashComplete, authLoading, profileLoading, segments]);

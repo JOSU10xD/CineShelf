@@ -157,7 +157,9 @@ export default function TabLayout() {
                             tabName="search"
                         />
                     ),
-                    headerShown: false,
+                    headerShown: true,
+                    headerLeft: () => <MenuButton />,
+                    headerTitle: 'Search'
                 }}
                 listeners={{
                     tabPress: () => animateTab('search'),
@@ -174,7 +176,9 @@ export default function TabLayout() {
                             tabName="watchlist"
                         />
                     ),
-                    headerShown: false,
+                    headerShown: true,
+                    headerLeft: () => <MenuButton />,
+                    headerTitle: 'Watchlist'
                 }}
                 listeners={{
                     tabPress: () => animateTab('watchlist'),

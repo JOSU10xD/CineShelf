@@ -15,8 +15,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
-      // Watchlist subcollection: Users can only read/write their own watchlist
+      // Watchlist subcollection
       match /watchlist/{movieId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Preferences subcollection
+      match /prefs/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Recommendations subcollection
+      match /recommendations/{docId} {
         allow read, write: if isOwner(userId);
       }
     }

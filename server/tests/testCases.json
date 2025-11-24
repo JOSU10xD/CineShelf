@@ -1,0 +1,64 @@
+[
+    {
+        "input": "malayalam classics",
+        "expected": {
+            "languages": [
+                "ml"
+            ],
+            "yearRange": {
+                "from": 1970,
+                "to": 2000
+            }
+        }
+    },
+    {
+        "input": "i'm feeling lonely",
+        "expected": {
+            "moods": [
+                "lonely",
+                "sad",
+                "melancholic"
+            ]
+        }
+    },
+    {
+        "input": "old cowboy movies",
+        "expected": {
+            "genres": [
+                "Western"
+            ],
+            "yearRange": {
+                "to": 1980
+            }
+        }
+    },
+    {
+        "input": "90s hindi action",
+        "expected": {
+            "languages": [
+                "hi"
+            ],
+            "genres": [
+                "Action"
+            ],
+            "yearRange": {
+                "from": 1990,
+                "to": 1999
+            }
+        }
+    },
+    {
+        "input": "i want sad movies",
+        "expected": {
+            "moods": [
+                "sad"
+            ]
+        }
+    },
+    {
+        "input": "i want movies about <slur>",
+        "expected": {
+            "needsConfirmation": true
+        }
+    }
+]

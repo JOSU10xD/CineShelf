@@ -1,0 +1,30 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - deploy/server-free-host
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Install Dependencies & Test
+        working-directory: ./server
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy to Render
+        if: success()
+        # Using a simple curl webhook if Render Deploy Hook is available,
+        # or relying on Render's auto-deploy if connected to repo.
+        # This step is a placeholder for the actual trigger if not auto-deploying.
+        run: echo "Tests passed. Render should auto-deploy if connected."

@@ -110,4 +110,16 @@ export const tmdbService = {
       return [];
     }
   },
+
+  getGenres: async (): Promise<{ id: number; name: string }[]> => {
+    try {
+      const response = await api.get('/genre/movie/list', {
+        params: { api_key: API_KEY },
+      });
+      return response.data.genres;
+    } catch (error) {
+      console.error('Get genres error:', error);
+      return [];
+    }
+  },
 };

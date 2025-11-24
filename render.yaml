@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: cineshelf-server
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm run start
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+      - key: TASTE_PROVIDER
+        value: openrouter
+      - key: OPENROUTER_URL
+        value: https://openrouter.ai/api/v1/chat/completions
+      - key: RECOMM_CACHE_TTL_HOURS
+        value: 12
