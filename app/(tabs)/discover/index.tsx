@@ -58,8 +58,8 @@ export default function HomeScreen() {
 
   const openFromHome = useCallback((item: TMDBSearchResult) => {
     router.push({
-      pathname: './movie-details',
-      params: { id: String(item.id), type: item.media_type }
+      pathname: `/movie/${item.id}`,
+      params: { type: item.media_type }
     } as any);
   }, [router]);
 

@@ -1,11 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+    Dimensions,
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
     withTiming
 } from 'react-native-reanimated';
 import { useDrawer } from '../contexts/DrawerContext';
@@ -40,7 +47,7 @@ export const Drawer = () => {
     useEffect(() => {
         if (isOpen) {
             zIndex.value = 1000;
-            translateX.value = withSpring(0, { damping: 20, stiffness: 90 });
+            translateX.value = withTiming(0, { duration: 300 });
             backdropOpacity.value = withTiming(0.5);
         } else {
             translateX.value = withTiming(-DRAWER_WIDTH, { duration: 300 }, (finished) => {
@@ -78,7 +85,7 @@ export const Drawer = () => {
 
     const avatarSource = profile?.avatarId ? AVATARS[String(profile.avatarId)] : null;
 
-    if (!isOpen && zIndex.value === -1) return null; // Optimization: don't render if closed
+    // if (!isOpen && zIndex.value === -1) return null; // Removed to fix Reanimated warning
 
     return (
         <>
@@ -113,9 +120,9 @@ export const Drawer = () => {
                                     <Text style={[styles.username, { color: theme.colors.text }]} numberOfLines={1}>
                                         {profile?.username || 'User'}
                                     </Text>
-                                    <Text style={[styles.email, { color: theme.colors.secondary }]} numberOfLines={1}>
-                                        {user.email || 'Guest User'}
-                                    </Text>
+                                    <TouchableOpacity onPress={() => handleNavigation('/profile-edit')}>
+                                        <Text style={[styles.editProfileText, { color: theme.colors.primary }]}>Edit Profile</Text>
+                                    </TouchableOpacity>
                                 </View>
                             </>
                         ) : (
@@ -259,6 +266,12 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontFamily: 'System',
         marginBottom: 2,
+    },
+    editProfileText: {
+        fontSize: 12,
+        fontWeight: '600',
+        fontFamily: 'System',
+        marginTop: 2,
     },
     email: {
         fontSize: 12,

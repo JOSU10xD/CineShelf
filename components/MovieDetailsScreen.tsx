@@ -58,10 +58,32 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
   useEffect(() => {
     if (movie) {
       setIsInWatchlist(
-        watchlist.some(item => item.id === movie.id && item.media_type === (movie.media_type || mediaType))
+        watchlist.some(item => item.movieId === String(movie.id) && (item.media_type || 'movie') === (movie.media_type || mediaType))
       );
     }
   }, [watchlist, movie, mediaType]);
+
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastOpacity = useState(new Animated.Value(0))[0];
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    setToastVisible(true);
+    Animated.sequence([
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2000),
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setToastVisible(false));
+  }, [toastOpacity]);
 
   const handleWatchlistToggle = useCallback(() => {
     if (!movie) return;
@@ -78,10 +100,12 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
 
     if (isInWatchlist) {
       removeFromWatchlist(movie.id, movieData.media_type);
+      showToast('Removed from Watchlist');
     } else {
       addToWatchlist(movieData);
+      showToast('Added to Watchlist');
     }
-  }, [movie, isInWatchlist, removeFromWatchlist, addToWatchlist, mediaType]);
+  }, [movie, isInWatchlist, removeFromWatchlist, addToWatchlist, mediaType, showToast]);
 
   const CastMember = memo(({ item }: { item: any }) => (
     <View style={styles.castMember}>
@@ -174,19 +198,22 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
           <TouchableOpacity
             style={[
               styles.watchlistButton,
-              { backgroundColor: theme.colors.primary },
-              isInWatchlist && { backgroundColor: theme.colors.card, borderWidth: 2, borderColor: theme.colors.primary }
+              { backgroundColor: isInWatchlist ? theme.colors.card : theme.colors.primary },
+              isInWatchlist && { borderWidth: 2, borderColor: theme.colors.primary }
             ]}
             onPress={handleWatchlistToggle}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons
-              name={isInWatchlist ? "bookmark" : "bookmark-outline"}
-              size={20}
-              color="#fff"
+              name={isInWatchlist ? "checkmark-circle" : "add-circle-outline"}
+              size={24}
+              color={isInWatchlist ? theme.colors.primary : "#fff"}
             />
-            <Text style={[styles.watchlistText, { color: '#fff' }]}>
-              {isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
+            <Text style={[
+              styles.watchlistText,
+              { color: isInWatchlist ? theme.colors.primary : '#fff' }
+            ]}>
+              {isInWatchlist ? 'Already Added' : 'Add to Watchlist'}
             </Text>
           </TouchableOpacity>
 
@@ -241,6 +268,24 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
           )}
         </View>
       </ScrollView>
+
+      {/* Toast Notification */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              opacity: toastOpacity,
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border
+            }
+          ]}
+          pointerEvents="none"
+        >
+          <Ionicons name="information-circle" size={24} color={theme.colors.primary} />
+          <Text style={[styles.toastText, { color: theme.colors.text }]}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </Animated.View>
   );
 };
@@ -428,5 +473,31 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     marginRight: 12,
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderWidth: 1,
+    gap: 10,
+  },
+  toastText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
   },
 });

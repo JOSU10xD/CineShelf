@@ -33,11 +33,10 @@ import Animated, {
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { TMDBSearchResult } from '../../../types/tmdb';
+
+import { WatchlistItem } from '../../../hooks/useWatchlist';
 
 // --- Constants & Types ---
-
-type WatchlistItem = TMDBSearchResult & { addedAt: string };
 
 const CARD_HEIGHT = 130;
 const MARGIN_BOTTOM = 12;
@@ -50,7 +49,7 @@ const LONG_PRESS_DELAY = 200;
 const SPRING_CONFIG = { damping: 20, stiffness: 150 };
 
 // Helper to generate a stable ID
-const getItemId = (item: WatchlistItem) => `${item.id}-${item.media_type}-${item.addedAt}`;
+const getItemId = (item: WatchlistItem) => `${item.movieId}-${item.addedAt}`;
 
 // --- Components ---
 
@@ -121,8 +120,8 @@ export default function WatchlistScreen() {
     (movie: WatchlistItem) => {
       if (isDragging.value) return;
       router.push({
-        pathname: '/watchlist/movie-details',
-        params: { id: String(movie.id), type: movie.media_type },
+        pathname: `/movie/${movie.movieId}`,
+        params: { type: 'movie' }, // Defaulting to movie since media_type might not be saved, or we need to save it.
       } as any);
     },
     [router, isDragging]
@@ -264,7 +263,7 @@ export default function WatchlistScreen() {
             onHapticStart={triggerHapticStart}
             onHapticMove={triggerHapticMove}
             onHapticEnd={triggerHapticEnd}
-            // pass down fallback colors in case child uses them (keeps behavior identical)
+          // pass down fallback colors in case child uses them (keeps behavior identical)
           />
         ))}
       </Animated.ScrollView>
@@ -535,8 +534,8 @@ function SortableItem({
         >
           <ImageWithFallback
             source={{
-              uri: item.poster_path
-                ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
+              uri: item.posterPath
+                ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
                 : '',
             }}
             style={[styles.poster, { backgroundColor: theme.colors.card }]}
@@ -545,7 +544,7 @@ function SortableItem({
 
           <View style={styles.movieInfo}>
             <Text style={[styles.movieTitle, { color: theme.colors.text }]} numberOfLines={2}>
-              {item.title || item.name}
+              {item.title}
             </Text>
 
             <View style={styles.movieDetails}>
@@ -583,7 +582,7 @@ function SortableItem({
           ) : (
             <TouchableOpacity
               style={[styles.actionButton, styles.removeButton]}
-              onPress={() => onRemove(item.id, item.media_type)}
+              onPress={() => onRemove(Number(item.movieId), item.media_type || 'movie')}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityLabel="Remove from watchlist"
             >

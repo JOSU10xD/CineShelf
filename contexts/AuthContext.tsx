@@ -8,8 +8,9 @@ import {
     signInWithCredential,
     User
 } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -38,12 +39,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
+                // Check if user doc exists, if not create it
+                const userRef = doc(db, 'users', currentUser.uid);
+                const userSnap = await getDoc(userRef);
+
+                if (!userSnap.exists()) {
+                    await setDoc(userRef, {
+                        uid: currentUser.uid,
+                        email: currentUser.email,
+                        username: currentUser.displayName || 'User',
+                        avatarId: 1, // Default avatar
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                        // Watchlist will be a subcollection, so no need to init here
+                    });
+                }
+
                 // If firebase user exists, clear guest user
                 setGuestUser(null);
             }
+            setUser(currentUser);
             setLoading(false);
         });
         return unsubscribe;

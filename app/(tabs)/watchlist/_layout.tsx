@@ -13,14 +13,6 @@ export default function WatchlistStackLayout() {
       }}
     >
       <Stack.Screen name="watchlist" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="movie-details"
-        options={{
-          headerShown: false,
-          presentation: 'card',
-          animation: 'slide_from_bottom',
-        }}
-      />
     </Stack>
   );
 }

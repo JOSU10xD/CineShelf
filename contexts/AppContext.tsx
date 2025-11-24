@@ -1,18 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { useWatchlist, WatchlistItem } from '../hooks/useWatchlist';
 import { TMDBSearchResult } from '../types/tmdb';
 
 interface AppContextType {
-  watchlist: (TMDBSearchResult & { addedAt: string })[];
+  watchlist: WatchlistItem[];
   addToWatchlist: (movie: TMDBSearchResult) => void;
   removeFromWatchlist: (id: number, mediaType: string) => void;
-  reorderWatchlist: (newOrder: (TMDBSearchResult & { addedAt: string })[]) => void;
+  reorderWatchlist: (newOrder: WatchlistItem[]) => void;
   searchState: {
     query: string;
     results: TMDBSearchResult[];
     selectedMovie: TMDBSearchResult | null;
   };
   updateSearchState: (updates: Partial<AppContextType['searchState']>) => void;
+  loading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -30,61 +32,35 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [watchlist, setWatchlist] = useState<(TMDBSearchResult & { addedAt: string })[]>([]);
+  const { user } = useAuth();
+  const { watchlist, loading, addMovieToWatchlist, removeMovieFromWatchlist, updateWatchlistOrder } = useWatchlist(user?.uid);
+
   const [searchState, setSearchState] = useState<AppContextType['searchState']>({
     query: '',
     results: [],
     selectedMovie: null
   });
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // Load watchlist from storage on app start
-  useEffect(() => {
-    const loadWatchlist = async () => {
-      try {
-        const storedWatchlist = await AsyncStorage.getItem('@cineshelf_watchlist');
-        if (storedWatchlist) {
-          setWatchlist(JSON.parse(storedWatchlist));
-        }
-      } catch (error) {
-        console.error('Failed to load watchlist', error);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-    loadWatchlist();
-  }, []);
-
-  // Save watchlist to storage whenever it changes
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    const saveWatchlist = async () => {
-      try {
-        await AsyncStorage.setItem('@cineshelf_watchlist', JSON.stringify(watchlist));
-      } catch (error) {
-        console.error('Failed to save watchlist', error);
-      }
-    };
-    saveWatchlist();
-  }, [watchlist, isLoaded]);
 
   const addToWatchlist = useCallback((movie: TMDBSearchResult) => {
-    setWatchlist(prev => {
-      const exists = prev.find(item => item.id === movie.id && item.media_type === movie.media_type);
-      if (exists) return prev;
-      const newWatchlist = [...prev, { ...movie, addedAt: new Date().toISOString() }];
-      return newWatchlist;
+    // Map TMDBSearchResult to the format expected by addMovieToWatchlist
+    addMovieToWatchlist({
+      id: movie.id,
+      title: movie.title || movie.name || 'Unknown Title',
+      poster_path: movie.poster_path || '',
+      media_type: movie.media_type,
+      release_date: movie.release_date,
+      first_air_date: movie.first_air_date,
+      vote_average: movie.vote_average
     });
-  }, []);
+  }, [addMovieToWatchlist]);
 
   const removeFromWatchlist = useCallback((id: number, mediaType: string) => {
-    setWatchlist(prev => prev.filter(item => !(item.id === id && item.media_type === mediaType)));
-  }, []);
+    removeMovieFromWatchlist(id);
+  }, [removeMovieFromWatchlist]);
 
-  const reorderWatchlist = useCallback((newOrder: (TMDBSearchResult & { addedAt: string })[]) => {
-    setWatchlist(newOrder);
-  }, []);
+  const reorderWatchlist = useCallback((newOrder: WatchlistItem[]) => {
+    updateWatchlistOrder(newOrder);
+  }, [updateWatchlistOrder]);
 
   const updateSearchState = useCallback((updates: Partial<AppContextType['searchState']>) => {
     setSearchState(prev => ({ ...prev, ...updates }));
@@ -97,7 +73,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       removeFromWatchlist,
       reorderWatchlist,
       searchState,
-      updateSearchState
+      updateSearchState,
+      loading
     }}>
       {children}
     </AppContext.Provider>

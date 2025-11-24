@@ -2,8 +2,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AnimatedSplash } from '../components/AnimatedSplash';
 import { Drawer } from '../components/Drawer';
-import { Splash } from '../components/Splash';
 import { AppProvider } from '../contexts/AppContext';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DrawerProvider } from '../contexts/DrawerContext';
@@ -26,24 +26,18 @@ function RootLayoutNav() {
         const inProfileSetup = (segments[0] as string) === 'profile-setup';
 
         if (!user && !inAuthGroup) {
-            // Redirect to auth if not logged in (optional, or let them browse as guest)
-            // Requirement says: "Add a new Auth screen before Home when user not authenticated"
-            // But also "Keep a fallback guest/no-login flow unchanged".
-            // So we will NOT force redirect to auth, but we will show Auth screen if they choose to login.
-            // However, the Splash requirement says "immediately navigates to Auth or Home".
-            // Let's navigate to Auth if no user, but allow skipping.
             router.replace('/auth' as any);
         } else if (user && !profile && !inProfileSetup) {
-            // If logged in but no profile, go to setup
             router.replace('/profile-setup' as any);
         } else if (user && profile && (inAuthGroup || inProfileSetup)) {
-            // If logged in and has profile, go to home
             router.replace('/(tabs)/discover' as any);
         }
     }, [user, profile, splashComplete, authLoading, profileLoading, segments]);
 
-    if (!splashComplete) {
-        return <Splash onFinish={() => setSplashComplete(true)} />;
+    const isReady = splashComplete && !authLoading && !profileLoading;
+
+    if (!isReady) {
+        return <AnimatedSplash onFinish={() => setSplashComplete(true)} />;
     }
 
     return (
@@ -57,6 +51,7 @@ function RootLayoutNav() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="auth" options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+            <Stack.Screen name="movie/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
             <Stack.Screen name="settings" options={{ presentation: 'card', headerShown: false }} />
             <Stack.Screen name="about" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
@@ -96,5 +91,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#121212', // Prevent white flash
     },
 });

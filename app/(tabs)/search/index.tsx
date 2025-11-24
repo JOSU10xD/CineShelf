@@ -12,6 +12,7 @@ import {
     View,
 } from 'react-native';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
+import { Toast } from '../../../components/Toast';
 import { useApp } from '../../../contexts/AppContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { tmdbService } from '../../../services/tmdb';
@@ -22,9 +23,17 @@ export default function SearchScreen() {
     const [suggestions, setSuggestions] = useState<TMDBSearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [searching, setSearching] = useState(false);
-    const { searchState, updateSearchState, addToWatchlist, watchlist } = useApp();
+    const { searchState, updateSearchState, addToWatchlist, removeFromWatchlist, watchlist } = useApp();
     const { theme } = useTheme();
     const router = useRouter();
+
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+
+    const showToast = (message: string) => {
+        setToastMessage(message);
+        setToastVisible(true);
+    };
 
     const timeoutRef = useRef<number | null>(null);
 
@@ -73,21 +82,31 @@ export default function SearchScreen() {
         setQuery(item.title || item.name || '');
         setSuggestions([]);
         router.push({
-            pathname: '/search/movie-details',
-            params: { id: String(item.id), type: item.media_type }
+            pathname: `/movie/${item.id}`,
+            params: { type: item.media_type }
         } as any);
     };
 
     const handleMovieSelect = (movie: TMDBSearchResult) => {
         updateSearchState({ selectedMovie: movie });
         router.push({
-            pathname: '/search/movie-details',
-            params: { id: String(movie.id), type: movie.media_type }
+            pathname: `/movie/${movie.id}`,
+            params: { type: movie.media_type }
         } as any);
     };
 
     const isInWatchlist = (movie: TMDBSearchResult) => {
-        return watchlist.some(item => item.id === movie.id && item.media_type === movie.media_type);
+        return watchlist.some(item => item.movieId === String(movie.id) && (item.media_type || 'movie') === (movie.media_type || 'movie'));
+    };
+
+    const handleWatchlistToggle = (item: TMDBSearchResult) => {
+        if (isInWatchlist(item)) {
+            removeFromWatchlist(item.id, item.media_type || 'movie');
+            showToast('Removed from Watchlist');
+        } else {
+            addToWatchlist(item);
+            showToast('Added to Watchlist');
+        }
     };
 
     const renderSuggestion = ({ item }: { item: TMDBSearchResult }) => (
@@ -102,39 +121,45 @@ export default function SearchScreen() {
         </TouchableOpacity>
     );
 
-    const renderMovie = ({ item }: { item: TMDBSearchResult }) => (
-        <TouchableOpacity
-            style={[styles.movieCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-            onPress={() => handleMovieSelect(item)}
-            activeOpacity={0.85}
-        >
-            <ImageWithFallback
-                source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
-                style={styles.poster}
-                type="poster"
-            />
-            <View style={styles.movieInfo}>
-                <Text style={[styles.movieTitle, { color: theme.colors.text }]}>{item.title || item.name}</Text>
-                <Text style={[styles.movieYear, { color: theme.colors.secondary }]}>
-                    {item.release_date ? new Date(item.release_date).getFullYear() :
-                        item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
-                </Text>
-                <Text style={[styles.movieType, { color: theme.colors.primary }]}>
-                    {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
-                </Text>
-            </View>
+    const renderMovie = ({ item }: { item: TMDBSearchResult }) => {
+        const inList = isInWatchlist(item);
+        return (
             <TouchableOpacity
-                style={styles.watchlistButton}
-                onPress={() => addToWatchlist(item)}
+                style={[styles.movieCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                onPress={() => handleMovieSelect(item)}
+                activeOpacity={0.85}
             >
-                <Ionicons
-                    name={isInWatchlist(item) ? "bookmark" : "bookmark-outline"}
-                    size={24}
-                    color={isInWatchlist(item) ? theme.colors.primary : theme.colors.text}
+                <ImageWithFallback
+                    source={{ uri: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '' }}
+                    style={styles.poster}
+                    type="poster"
                 />
+                <View style={styles.movieInfo}>
+                    <Text style={[styles.movieTitle, { color: theme.colors.text }]}>{item.title || item.name}</Text>
+                    <Text style={[styles.movieYear, { color: theme.colors.secondary }]}>
+                        {item.release_date ? new Date(item.release_date).getFullYear() :
+                            item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A'}
+                    </Text>
+                    <Text style={[styles.movieType, { color: theme.colors.primary }]}>
+                        {item.media_type === 'movie' ? 'Movie' : 'TV Series'}
+                    </Text>
+                </View>
+                <TouchableOpacity
+                    style={[
+                        styles.watchlistButton,
+                        inList && { backgroundColor: theme.colors.primary, borderRadius: 12, padding: 8 }
+                    ]}
+                    onPress={() => handleWatchlistToggle(item)}
+                >
+                    <Ionicons
+                        name={inList ? "bookmark" : "bookmark-outline"}
+                        size={24}
+                        color={inList ? "#fff" : theme.colors.text}
+                    />
+                </TouchableOpacity>
             </TouchableOpacity>
-        </TouchableOpacity>
-    );
+        );
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -199,6 +224,8 @@ export default function SearchScreen() {
                     </Text>
                 </View>
             )}
+
+            <Toast visible={toastVisible} message={toastMessage} onHide={() => setToastVisible(false)} />
         </View>
     );
 }
