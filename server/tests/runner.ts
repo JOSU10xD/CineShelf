@@ -39,7 +39,7 @@ async function runTests() {
                 if (!result.languages || !test.expected.languages.every((l: string) => result.languages.includes(l))) match = false;
             }
             if (test.expected.genres) {
-                if (!result.genres || !test.expected.genres.every((g: string) => result.genres.some((rg: any) => rg.name.toLowerCase().includes(g.toLowerCase())))) match = false;
+                if (!result.genres || !test.expected.genres.every((g: string) => result.genres?.some((rg: any) => rg.name.toLowerCase().includes(g.toLowerCase())))) match = false;
             }
             // ... add more checks
 
