@@ -2,10 +2,10 @@
     "name": "cineshelf-server",
     "version": "1.0.0",
     "description": "Recommendation server for CineShelf",
-    "main": "dist/index.js",
+    "main": "dist/src/index.js",
     "scripts": {
         "build": "tsc",
-        "start": "node dist/index.js",
+        "start": "node dist/src/index.js",
         "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
         "test": "ts-node tests/runner.ts"
     },
