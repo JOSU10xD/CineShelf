@@ -22,9 +22,14 @@ export const recommendationApi = {
         return response.data;
     },
 
-    recommend: async (mode: 'ai' | 'manual', forceRefresh = false) => {
+    recommend: async (mode: 'ai' | 'manual', forceRefresh = false, preferences?: any) => {
         const headers = await getHeaders();
-        const response = await axios.post(`${API_URL}/recommend`, { mode, forceRefresh }, { headers });
+        const response = await axios.post(`${API_URL}/recommend`, {
+            mode,
+            randomize: forceRefresh,
+            forceRefresh,
+            preferences
+        }, { headers });
         return response.data;
     },
 

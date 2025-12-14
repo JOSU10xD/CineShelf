@@ -20,19 +20,38 @@ class TmdbService {
         this.fetchGenres();
     }
 
-    private async fetchGenres() {
+    private async fetchGenres(retries = 3, delay = 1000) {
         if (!this.apiKey) return;
-        try {
-            const response = await axios.get(`${TMDB_BASE_URL}/genre/movie/list`, {
-                params: { api_key: this.apiKey },
-            });
-            this.genreList = response.data.genres;
-            this.genreList.forEach((g) => {
-                this.genres.set(g.name.toLowerCase(), g.id);
-            });
-            console.log(`Loaded ${this.genres.size} genres from TMDb`);
-        } catch (error) {
-            console.error('Failed to fetch genres:', error);
+
+        const https = require('https');
+
+        const client = axios.create({
+            baseURL: TMDB_BASE_URL,
+            timeout: 10000,
+            params: { api_key: this.apiKey },
+            httpsAgent: new https.Agent({ family: 4 }) // Force IPv4
+        });
+
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await client.get('/genre/movie/list');
+                this.genreList = response.data.genres;
+                this.genreList.forEach((g) => {
+                    this.genres.set(g.name.toLowerCase(), g.id);
+                });
+                console.log(`Loaded ${this.genres.size} genres from TMDb`);
+                return; // Success
+            } catch (error: any) {
+                const isLastAttempt = i === retries - 1;
+                console.warn(`Attempt ${i + 1}/${retries} to fetch genres failed: ${error.message}`);
+
+                if (isLastAttempt) {
+                    console.error('Failed to fetch genres after multiple attempts. Server may not function correctly.');
+                    // Don't crash the process, potentially retry later or run with empty genres
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i))); // Exponential backoff
+                }
+            }
         }
     }
 
@@ -51,10 +70,14 @@ class TmdbService {
                     sort_by: 'popularity.desc',
                     ...params,
                 },
+                timeout: 10000
             });
             return response.data;
-        } catch (error) {
-            console.error('TMDb discover error:', error);
+        } catch (error: any) {
+            console.error(`TMDb discover error: ${error.message}`);
+            if (error.response) {
+                console.error(`Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data)}`);
+            }
             return { results: [] };
         }
     }

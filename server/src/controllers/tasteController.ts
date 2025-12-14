@@ -8,11 +8,15 @@ const provider = new OpenRouterAdapter(); // Could be dynamic based on env
 export const interpretTaste = async (req: Request, res: Response) => {
     try {
         const token = req.headers.authorization?.split('Bearer ')[1];
-        if (!token) {
-            res.status(401).json({ error: 'Unauthorized' });
-            return;
+        if (token && token !== 'undefined') {
+            try {
+                await auth.verifyIdToken(token);
+            } catch (e) {
+                // If token is invalid (e.g. expired guest token?), we might want to fail or just continue?
+                // For interpret-taste (stateless), we can continue.
+            }
         }
-        await auth.verifyIdToken(token);
+        // Proceed even if no token (Guest AI use is allowed)
 
         const { text } = req.body;
         if (!text) {
@@ -33,8 +37,18 @@ export const interpretTaste = async (req: Request, res: Response) => {
 
         const constraints = await provider.parseTaste(text);
         res.json(constraints);
-    } catch (error) {
+    } catch (error: any) {
         console.error('Interpret taste error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+
+        // Handle Firebase Auth errors (nested or top-level)
+        const errorCode = error.code || error.errorInfo?.code;
+        const errorMessage = error.message || '';
+
+        if (errorCode?.startsWith('auth/') || errorMessage.includes('Decoding Firebase ID token failed')) {
+            res.status(401).json({ error: 'Unauthorized', details: 'Invalid or expired token' });
+            return;
+        }
+
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 };

@@ -155,6 +155,28 @@ export const Drawer = () => {
                                 styles.menuItem,
                                 { backgroundColor: pressed ? theme.colors.border : 'transparent' },
                             ]}
+                            onPress={() => handleNavigation('/genre-picker')}
+                        >
+                            <Ionicons name="grid-outline" size={24} color={theme.colors.text} />
+                            <Text style={[styles.menuText, { color: theme.colors.text }]}>Pick Genres</Text>
+                        </Pressable>
+
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.menuItem,
+                                { backgroundColor: pressed ? theme.colors.border : 'transparent' },
+                            ]}
+                            onPress={() => handleNavigation('/ai-recommend')}
+                        >
+                            <Ionicons name="sparkles-outline" size={24} color={theme.colors.text} />
+                            <Text style={[styles.menuText, { color: theme.colors.text }]}>AI Assistant</Text>
+                        </Pressable>
+
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.menuItem,
+                                { backgroundColor: pressed ? theme.colors.border : 'transparent' },
+                            ]}
                             onPress={() => handleNavigation('/settings')}
                         >
                             <Ionicons name="settings-outline" size={24} color={theme.colors.text} />

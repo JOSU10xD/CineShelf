@@ -1,8 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getFirestore, updateDoc } from 'firebase/firestore';
+import { doc, getFirestore, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
     Alert,
     Image,
     ScrollView,
@@ -28,14 +27,14 @@ const AVATARS = [
 
 const MOODS = ['Uplifting', 'Melancholic', 'Nostalgic', 'Action-packed', 'Romantic', 'Dark', 'Thought-provoking', 'Relaxing'];
 
-export default function ProfileSetupScreen() {
+export default function ProfileSetupScreen({ initialStep, initialMode }: { initialStep?: 'profile' | 'taste', initialMode?: 'manual' | 'ai' }) {
     const { user } = useAuth();
     const { saveUserProfile } = useUserProfile(user?.uid);
     const { theme } = useTheme();
     const router = useRouter();
 
     const params = useLocalSearchParams();
-    const [step, setStep] = useState<'profile' | 'taste'>((params.initialStep as 'profile' | 'taste') || 'profile');
+    const [step, setStep] = useState<'profile' | 'taste'>(initialStep || (params.initialStep as 'profile' | 'taste') || 'profile');
 
     // Profile State
     const [username, setUsername] = useState('');
@@ -43,7 +42,7 @@ export default function ProfileSetupScreen() {
     const [saving, setSaving] = useState(false);
 
     // Taste State
-    const [tasteMode, setTasteMode] = useState<'manual' | 'ai'>('manual');
+    const [tasteMode, setTasteMode] = useState<'manual' | 'ai'>(initialMode || 'manual');
     const [genres, setGenres] = useState<{ id: number; name: string }[]>([]);
     const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
     const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -124,35 +123,81 @@ export default function ProfileSetupScreen() {
             const prefsRef = doc(db, 'users', user.uid, 'prefs', 'main');
 
             if (tasteMode === 'manual') {
-                await updateDoc(prefsRef, { // Assuming doc exists from saveUserProfile or we need setDoc with merge
+                const manualPrefs = {
                     manualGenres: selectedGenres,
                     manualMoods: selectedMoods,
-                    tasteText: null,
-                    lastParsedConstraints: null
+                };
+
+                // Try to save, but ignore permissions error
+                try {
+                    await setDoc(prefsRef, {
+                        ...manualPrefs,
+                        tasteText: null,
+                        lastParsedConstraints: null
+                    }, { merge: true });
+                } catch (e) { console.log("Skipping DB save (guest/perm issues)"); }
+
+                // Save to ProfileContext (handles local storage for Guest)
+                await saveUserProfile({
+                    uid: user.uid,
+                    preferences: {
+                        mode: 'manual',
+                        manualGenres: selectedGenres,
+                        manualMoods: selectedMoods
+                    }
                 });
-                await recommendationApi.recommend('manual');
+
+                // Pass prefs directly to bypass DB read on server
+                await recommendationApi.recommend('manual', true, manualPrefs);
+
             } else {
-                if (!parsedConstraints) {
-                    Alert.alert('Error', 'Please parse your taste first or switch to manual');
+                if (!tasteText.trim()) {
+                    Alert.alert('Details Needed', 'Please describe what you want to watch.');
                     setGenerating(false);
                     return;
                 }
-                await updateDoc(prefsRef, {
-                    tasteText: tasteText,
-                    lastParsedConstraints: parsedConstraints,
-                    manualGenres: [],
-                    manualMoods: []
+
+                // Parse first
+                let constraints = parsedConstraints;
+                if (!constraints) {
+                    try {
+                        constraints = await recommendationApi.interpretTaste(tasteText);
+                        setParsedConstraints(constraints);
+                    } catch (err) {
+                        console.error(err);
+                        Alert.alert('Error', 'Failed to interpret your request.');
+                        setGenerating(false);
+                        return;
+                    }
+                }
+
+                // Try to save
+                try {
+                    await setDoc(prefsRef, {
+                        tasteText: tasteText,
+                        lastParsedConstraints: constraints,
+                        manualGenres: [],
+                        manualMoods: []
+                    }, { merge: true });
+                } catch (e) { console.log("Skipping DB save (guest/perm issues)"); }
+
+                // Save to ProfileContext
+                await saveUserProfile({
+                    uid: user.uid,
+                    preferences: {
+                        mode: 'ai',
+                        lastParsedConstraints: constraints,
+                        tasteText: tasteText
+                    }
                 });
-                await recommendationApi.recommend('ai');
+
+                // Pass constraints directly
+                await recommendationApi.recommend('ai', true, { lastParsedConstraints: constraints });
             }
             router.replace('/(tabs)/discover' as any);
         } catch (error) {
             console.error('Finish error:', error);
-            // Fallback if updateDoc fails (doc might not exist)
-            // In real app, ensure doc exists. saveUserProfile creates 'users/{uid}' but 'prefs/main' might be new.
-            // For now, assume we might need to create it.
-            // Skipping detailed error handling for brevity in this step.
-            Alert.alert('Error', 'Failed to save preferences');
+            Alert.alert('Error', 'Failed to get recommendations');
         } finally {
             setGenerating(false);
         }
@@ -309,23 +354,6 @@ export default function ProfileSetupScreen() {
                             multiline
                             numberOfLines={4}
                         />
-                        <TouchableOpacity
-                            style={[styles.smallButton, { backgroundColor: theme.colors.secondary, marginTop: 10 }]}
-                            onPress={handleParseTaste}
-                            disabled={parsing}
-                        >
-                            {parsing ? <ActivityIndicator color="#fff" /> : <Text style={styles.smallButtonText}>Parse & Preview</Text>}
-                        </TouchableOpacity>
-
-                        {parsedConstraints && (
-                            <View style={[styles.previewBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                                <Text style={[styles.previewTitle, { color: theme.colors.primary }]}>We understood:</Text>
-                                <Text style={{ color: theme.colors.text }}>Genres: {parsedConstraints.genres.map((g: any) => g.name).join(', ')}</Text>
-                                <Text style={{ color: theme.colors.text }}>Moods: {parsedConstraints.moods.join(', ')}</Text>
-                                <Text style={{ color: theme.colors.text }}>Years: {parsedConstraints.yearRange.from} - {parsedConstraints.yearRange.to}</Text>
-                                <Text style={{ color: theme.colors.secondary, fontStyle: 'italic', marginTop: 4 }}>"{parsedConstraints.explain}"</Text>
-                            </View>
-                        )}
                     </>
                 )}
 
@@ -339,7 +367,7 @@ export default function ProfileSetupScreen() {
                     disabled={generating}
                 >
                     <Text style={styles.saveButtonText}>
-                        {generating ? 'Generating Recommendations...' : 'Finish & Explore'}
+                        {generating ? 'Finding Movies...' : 'Show Recommendations'}
                     </Text>
                 </TouchableOpacity>
 

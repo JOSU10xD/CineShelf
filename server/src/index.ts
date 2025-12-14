@@ -1,11 +1,11 @@
-import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
+
+import cors from 'cors';
 import express from 'express';
 import { apiRoutes } from './routes/api';
 import { initializeFirebase } from './services/firebaseService';
 import { tmdbService } from './services/tmdbService';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;

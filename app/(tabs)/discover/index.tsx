@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, InteractionManager, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { memo, useCallback, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
 import { useApp } from '../../../contexts/AppContext';
+import { useProfile } from '../../../contexts/ProfileContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { recommendationApi } from '../../../services/recommendationApi';
 
@@ -33,7 +34,9 @@ const MovieTile = memo(({ item, onPress, theme }: { item: any, onPress: (item: a
 export default function HomeScreen() {
   const router = useRouter();
   const { watchlist } = useApp();
+
   const { theme } = useTheme();
+  const { profile } = useProfile();
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,44 +47,127 @@ export default function HomeScreen() {
       setError(null);
       if (force) {
         setRefreshing(true);
-        // We don't know the mode here easily without storing it in local state or fetching prefs.
-        // But the server recommend endpoint needs a mode.
-        // Actually, the plan says "Add Refresh recommendations button in UI to request POST /api/v1/recommend with forceRefresh=true".
-        // But we need to know if it's 'ai' or 'manual'.
-        // For now, let's assume 'ai' or try to fetch existing to see mode?
-        // The server GET returns the mode in the response.
-        // So we can GET first, see mode, then POST with that mode.
 
-        // Quick fix: Try to get current recs to find mode, if fail, default to 'ai' (or ask user).
-        // If we are refreshing, we likely have recs.
-        const current = await recommendationApi.getRecommendations();
-        if (current && current.mode) {
-          const newRecs = await recommendationApi.recommend(current.mode, true);
+        // Use local profile preferences if available (Reliable for Guest & synced users)
+        let modeToUse = profile?.preferences?.mode || 'ai';
+        let prefsToPass = undefined;
+
+        console.log('[Discover] Loading with profile prefs:', JSON.stringify(profile?.preferences, null, 2));
+
+        if (profile?.preferences) {
+          if (modeToUse === 'manual') {
+            prefsToPass = {
+              manualGenres: profile.preferences.manualGenres,
+              manualMoods: profile.preferences.manualMoods
+            };
+          } else {
+            prefsToPass = {
+              lastParsedConstraints: profile.preferences.lastParsedConstraints
+            };
+          }
+        } else {
+          // Fallback: Try to get from server via getRecommendations (Old logic)
+          try {
+            const current = await recommendationApi.getRecommendations();
+            if (current && current.mode) {
+              modeToUse = current.mode;
+              if (current.constraints) {
+                if (current.mode === 'manual') {
+                  prefsToPass = {
+                    manualGenres: current.constraints.genres?.map((g: any) => g.id),
+                    manualMoods: current.constraints.moods
+                  };
+                } else {
+                  prefsToPass = { lastParsedConstraints: current.constraints };
+                }
+              }
+            }
+          } catch (e) {
+            console.log("Fallback fetch failed", e);
+          }
+        }
+
+        const newRecs = await recommendationApi.recommend(modeToUse as any, true, prefsToPass);
+        console.log('[Discover] Received recommendations:', newRecs ? `Count: ${newRecs.items?.length}` : 'null');
+        if (newRecs && newRecs.items) {
           setRecommendations(newRecs.items);
         } else {
-          // Fallback or re-onboard
-          const newRecs = await recommendationApi.recommend('ai', true); // Defaulting to AI
-          setRecommendations(newRecs.items);
+          console.warn('[Discover] No items in response:', newRecs);
+          setRecommendations([]);
         }
       } else {
         setLoading(true);
-        const data = await recommendationApi.getRecommendations();
-        setRecommendations(data.items || []);
+
+        // Initial load: Prefer POST if we have local prefs (ensures Guest works)
+        if (profile?.preferences) {
+          const mode = profile.preferences.mode || 'ai';
+          let prefs = undefined;
+          console.log('[Discover] Initial load with prefs:', mode);
+
+          if (mode === 'manual') {
+            prefs = {
+              manualMoods: profile.preferences.manualMoods || []
+            };
+          } else {
+            prefs = { lastParsedConstraints: profile.preferences.lastParsedConstraints };
+          }
+          // We use POST here to ensure we get results based on current local prefs
+          const newRecs = await recommendationApi.recommend(mode, false, prefs);
+          console.log('[Discover] Initial load received:', newRecs ? `Count: ${newRecs.items?.length}` : 'null');
+          if (newRecs && newRecs.items && newRecs.items.length > 0) {
+            setRecommendations(newRecs.items);
+          } else {
+            console.warn('[Discover] Initial load returned empty items.');
+            setError('No movies matched your criteria. We are trying to find alternatives...');
+            // In reality, server now handles fallbacks, so this shouldn't happen often.
+            setRecommendations([]);
+          }
+        } else {
+          // Fallback to GET
+          const data = await recommendationApi.getRecommendations();
+          console.log('[Discover] Fallback GET received:', data ? `Count: ${data.items?.length}` : 'null');
+          if (data && data.items && data.items.length > 0) {
+            setRecommendations(data.items);
+          } else {
+            setRecommendations([]);
+            // Don't set error here, just show empty or let the user try again
+          }
+        }
       }
     } catch (err) {
-      console.error('Load recs error:', err);
-      setError('Failed to load recommendations. Please check your connection or update your taste.');
+      console.error('Load recs error details:', err);
+      // Check for network error specifically if possible
+      // @ts-ignore
+      if (err.message === 'Network Error' || err.code === 'ECONNABORTED' || err.message?.includes('Network request failed')) {
+        setError('Network error: Unable to connect to server. Check your internet.');
+      } else {
+        setError('No recommendations found at the moment.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [profile]);
 
-  useEffect(() => {
-    InteractionManager.runAfterInteractions(() => {
+  useFocusEffect(
+    useCallback(() => {
+      // When screen comes into focus, if we have recommendations, maybe checking if they match current prefs?
+      // OR just checking if we need to reload. 
+      // For now, let's trigger a load if recommendations are empty OR if profile changed?
+      // Actually, just relying on useCallback dependency [profile] in loadRecommendations might be tricky with FocusEffect.
+
+      // Simple approach: trigger loadRecommendations() which checks cached data vs force.
+      // But we want to auto-refresh if prefs changed.
+      // Since loadRecommendations depends on [profile], if profile changed, the function changed.
+
+      console.log('[Discover] Focus Effect Triggered');
       loadRecommendations();
-    });
-  }, [loadRecommendations]);
+
+      return () => {
+        // cleanup
+      };
+    }, [loadRecommendations])
+  );
 
   const openFromHome = useCallback((item: any) => {
     router.push({

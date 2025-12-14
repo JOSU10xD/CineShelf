@@ -11,6 +11,13 @@ export interface UserProfile {
     avatarId: number | string;
     createdAt?: Timestamp | string;
     updatedAt?: Timestamp | string;
+    preferences?: {
+        mode: 'manual' | 'ai';
+        manualGenres?: number[];
+        manualMoods?: string[];
+        lastParsedConstraints?: any;
+        tasteText?: string;
+    };
 }
 
 interface ProfileContextType {
@@ -101,6 +108,20 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         if (!profile) {
             (payload as any).createdAt = serverTimestamp();
         }
+
+        // Optimistic update for logged-in users to ensure instant UI consistency
+        // verification: This payload has serverTimestamp() which is an object, not a Date.
+        // We might need to handle that for local state if UI expects Date.
+        // However, typescript might complain if we put serverTimestamp() in UserProfile if it expects Timestamp.
+        // UserProfile allows "Timestamp | string". serverTimestamp() is FieldValue.
+        // For local state, let's use current date string, but for DB use serverTimestamp().
+
+        const localPayload = {
+            ...profile,
+            ...data, // This has the preferences
+            updatedAt: new Date().toISOString()
+        };
+        setProfile(localPayload as UserProfile);
 
         await setDoc(userRef, payload, { merge: true });
     };
