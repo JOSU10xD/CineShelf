@@ -134,14 +134,42 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
         setProgress(0);
         setGenerating(true);
 
-        const startTime = Date.now();
-        const duration = 5000; // 5 seconds to get to 95%
+        // Organic loading progress simulation
+        let currentProgress = 0;
+        let isStalled = false;
+        let stallTimer = 0;
         
+        // Pick random pause points (e.g. one in 30-45% range, one in 65-80% range)
+        const stallPoints = [
+            Math.floor(Math.random() * 15) + 30,
+            Math.floor(Math.random() * 15) + 65,
+        ];
+        
+        // Random final cap target between 91% and 97%
+        const maxLoadingCap = Math.floor(Math.random() * 7) + 91;
+
         const progressInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const percentage = Math.min(Math.floor((elapsed / duration) * 95), 95);
-            setProgress(percentage);
-        }, 100);
+            if (isStalled) {
+                stallTimer -= 150;
+                if (stallTimer <= 0) {
+                    isStalled = false;
+                }
+                return;
+            }
+
+            // Normal tick: increment progress by a small random step (1% to 3%)
+            const step = Math.floor(Math.random() * 3) + 1;
+            currentProgress = Math.min(currentProgress + step, maxLoadingCap);
+            setProgress(currentProgress);
+
+            // Trigger a random duration stall if we hit a stall point
+            if (stallPoints.length > 0 && currentProgress >= stallPoints[0]) {
+                stallPoints.shift();
+                isStalled = true;
+                // Stall for a random duration between 800ms and 2300ms
+                stallTimer = Math.floor(Math.random() * 1500) + 800;
+            }
+        }, 150);
 
         try {
             const db = getFirestore();
