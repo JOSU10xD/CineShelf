@@ -1,6 +1,6 @@
 import { Asset } from 'expo-asset';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
     runOnJS,
     useAnimatedStyle,
@@ -9,26 +9,30 @@ import Animated, {
     withSpring,
     withTiming
 } from 'react-native-reanimated';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface AnimatedSplashProps {
+    ready: boolean;
     onFinish: () => void;
 }
 
-export const AnimatedSplash = ({ onFinish }: AnimatedSplashProps) => {
-    const { theme } = useTheme();
+export const AnimatedSplash = ({ ready, onFinish }: AnimatedSplashProps) => {
     const [isReady, setIsReady] = useState(false);
 
     // Animation values
-    const scale = useSharedValue(0.3);
-    const opacity = useSharedValue(0);
+    const logoScale = useSharedValue(0.5);
+    const logoOpacity = useSharedValue(0);
+    const textTranslateY = useSharedValue(20);
+    const textOpacity = useSharedValue(0);
     const containerOpacity = useSharedValue(1);
 
     useEffect(() => {
         const prepare = async () => {
             try {
                 // Preload assets
-                await Asset.fromModule(require('../assets/images/cinelogo.jpeg')).downloadAsync();
+                await Promise.all([
+                    Asset.fromModule(require('../assets/images/cineshelf.png')).downloadAsync(),
+                    Asset.fromModule(require('../assets/images/cineshelftxt.png')).downloadAsync(),
+                ]);
             } catch (e) {
                 console.warn(e);
             } finally {
@@ -41,37 +45,57 @@ export const AnimatedSplash = ({ onFinish }: AnimatedSplashProps) => {
 
     useEffect(() => {
         if (isReady) {
-            // Start animation
-            opacity.value = withTiming(1, { duration: 800 });
-            scale.value = withSpring(1, { damping: 12, stiffness: 100 });
+            // Animate Logo
+            logoOpacity.value = withTiming(1, { duration: 1000 });
+            logoScale.value = withSpring(1.0, { damping: 15, stiffness: 90 });
 
-            // Exit animation
-            containerOpacity.value = withDelay(2000, withTiming(0, { duration: 500 }, (finished) => {
+            // Animate Text after logo starts
+            textOpacity.value = withDelay(400, withTiming(1, { duration: 800 }));
+            textTranslateY.value = withDelay(400, withSpring(0, { damping: 15, stiffness: 90 }));
+        }
+    }, [isReady, logoOpacity, logoScale, textOpacity, textTranslateY]);
+
+    useEffect(() => {
+        if (isReady && ready) {
+            // Smooth exit animation
+            containerOpacity.value = withDelay(1200, withTiming(0, { duration: 600 }, (finished) => {
                 if (finished) {
                     runOnJS(onFinish)();
                 }
             }));
         }
-    }, [isReady]);
-
-    const logoStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-        transform: [{ scale: scale.value }]
-    }));
+    }, [isReady, ready, containerOpacity, onFinish]);
 
     const containerStyle = useAnimatedStyle(() => ({
         opacity: containerOpacity.value
     }));
 
+    const logoStyle = useAnimatedStyle(() => ({
+        opacity: logoOpacity.value,
+        transform: [{ scale: logoScale.value }]
+    }));
+
+    const textStyle = useAnimatedStyle(() => ({
+        opacity: textOpacity.value,
+        transform: [{ translateY: textTranslateY.value }]
+    }));
+
     if (!isReady) return null;
 
     return (
-        <Animated.View style={[styles.container, { backgroundColor: theme.colors.background }, containerStyle]}>
-            <Animated.Image
-                source={require('../assets/images/cinelogo.jpeg')}
-                style={[styles.logo, logoStyle]}
-                resizeMode="contain"
-            />
+        <Animated.View style={[styles.container, containerStyle]}>
+            <View style={styles.content}>
+                <Animated.Image
+                    source={require('../assets/images/cineshelf.png')}
+                    style={[styles.logo, logoStyle]}
+                    resizeMode="contain"
+                />
+                <Animated.Image
+                    source={require('../assets/images/cineshelftxt.png')}
+                    style={[styles.textLogo, textStyle]}
+                    resizeMode="contain"
+                />
+            </View>
         </Animated.View>
     );
 };
@@ -79,12 +103,21 @@ export const AnimatedSplash = ({ onFinish }: AnimatedSplashProps) => {
 const styles = StyleSheet.create({
     container: {
         ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#0A0A0A', // Deep dark professional startup state
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 99999,
     },
+    content: {
+        alignItems: 'center',
+        gap: 16,
+    },
     logo: {
-        width: 200,
-        height: 200,
+        width: 140,
+        height: 140,
+    },
+    textLogo: {
+        width: 180,
+        height: 45,
     },
 });

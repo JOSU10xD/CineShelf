@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../services/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -27,7 +28,8 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [guestUser, setGuestUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [authLoaded, setAuthLoaded] = useState(false);
+    const [guestLoaded, setGuestLoaded] = useState(false);
 
     const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
         clientId: '683253241088-cjr7ahqm70ltt8hgrn1hmjb3iedeohpf.apps.googleusercontent.com',
@@ -39,29 +41,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                // Check if user doc exists, if not create it
-                const userRef = doc(db, 'users', currentUser.uid);
-                const userSnap = await getDoc(userRef);
-
-                if (!userSnap.exists()) {
-                    await setDoc(userRef, {
-                        uid: currentUser.uid,
-                        email: currentUser.email,
-                        username: currentUser.displayName || 'User',
-                        avatarId: 1, // Default avatar
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        // Watchlist will be a subcollection, so no need to init here
-                    });
+        const loadGuest = async () => {
+            try {
+                const storedGuest = await AsyncStorage.getItem('guest_user');
+                if (storedGuest) {
+                    setGuestUser(JSON.parse(storedGuest));
                 }
-
-                // If firebase user exists, clear guest user
-                setGuestUser(null);
+            } catch (e) {
+                console.error("Error loading guest session", e);
+            } finally {
+                setGuestLoaded(true);
             }
-            setUser(currentUser);
-            setLoading(false);
+        };
+        loadGuest();
+
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            try {
+                if (currentUser) {
+                    // Check if user doc exists, if not create it
+                    const userRef = doc(db, 'users', currentUser.uid);
+                    const userSnap = await getDoc(userRef);
+
+                    if (!userSnap.exists()) {
+                        await setDoc(userRef, {
+                            uid: currentUser.uid,
+                            email: currentUser.email,
+                            username: currentUser.displayName || 'User',
+                            avatarId: 1, // Default avatar
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp(),
+                        });
+                    }
+
+                    // If firebase user exists, clear guest user
+                    setGuestUser(null);
+                    await AsyncStorage.removeItem('guest_user');
+                }
+                setUser(currentUser);
+            } catch (error) {
+                console.error("Auth state change processing error:", error);
+            } finally {
+                setAuthLoaded(true);
+            }
         });
         return unsubscribe;
     }, []);
@@ -91,17 +112,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             displayName: 'Guest',
             photoURL: null,
         };
-        setGuestUser(guest);
+        try {
+            await AsyncStorage.setItem('guest_user', JSON.stringify(guest));
+            setGuestUser(guest);
+        } catch (error) {
+            console.error("Error saving guest user to storage", error);
+        }
     };
 
     const signOut = async () => {
         try {
             await firebaseSignOut(auth);
             setGuestUser(null);
+            await AsyncStorage.removeItem('guest_user');
         } catch (error) {
             console.error("Error signing out", error);
         }
     };
+
+    const loading = !authLoaded || !guestLoaded;
 
     const value = {
         user: user || guestUser,
