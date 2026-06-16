@@ -19,6 +19,7 @@ import { recommendationApi } from '../services/recommendationApi';
 import { tmdbService } from '../services/tmdb';
 import Loader from '../components/Loader';
 import CinemaLoadingInsights, { Insight } from '../components/CinemaLoadingInsights';
+import { Ionicons } from '@expo/vector-icons';
 
 const SETUP_INSIGHTS: Insight[] = [
     { id: '1', category: 'Taste Analysis', body: 'Consulting the digital movie oracle to parse your taste...' },
@@ -41,7 +42,7 @@ const MOODS = ['Uplifting', 'Melancholic', 'Nostalgic', 'Action-packed', 'Romant
 
 export default function ProfileSetupScreen({ initialStep, initialMode }: { initialStep?: 'profile' | 'taste', initialMode?: 'manual' | 'ai' }) {
     const { user } = useAuth();
-    const { saveUserProfile } = useUserProfile(user?.uid);
+    const { profile, saveUserProfile } = useUserProfile(user?.uid);
     const { theme } = useTheme();
     const router = useRouter();
 
@@ -63,6 +64,36 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
     const [parsing, setParsing] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [showHistory, setShowHistory] = useState(false);
+
+    // Prefill states when profile context loads
+    useEffect(() => {
+        if (profile) {
+            if (profile.username && !username) {
+                setUsername(profile.username);
+            }
+            if (profile.avatarId) {
+                setSelectedAvatarId(Number(profile.avatarId));
+            }
+            if (profile.preferences) {
+                if (profile.preferences.mode) {
+                    setTasteMode(profile.preferences.mode);
+                }
+                if (profile.preferences.tasteText && !tasteText) {
+                    setTasteText(profile.preferences.tasteText);
+                }
+                if (profile.preferences.manualGenres && selectedGenres.length === 0) {
+                    setSelectedGenres(profile.preferences.manualGenres);
+                }
+                if (profile.preferences.manualMoods && selectedMoods.length === 0) {
+                    setSelectedMoods(profile.preferences.manualMoods);
+                }
+                if (profile.preferences.lastParsedConstraints && !parsedConstraints) {
+                    setParsedConstraints(profile.preferences.lastParsedConstraints);
+                }
+            }
+        }
+    }, [profile, username, tasteText, selectedGenres.length, selectedMoods.length, parsedConstraints]);
 
     useEffect(() => {
         if (step === 'taste') {
@@ -236,13 +267,19 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                     }, { merge: true });
                 } catch (e) { console.log("Skipping DB save (guest/perm issues)"); }
 
+                const updatedHistory = [
+                    tasteText.trim(),
+                    ...(profile?.aiPromptHistory || []).filter(p => p !== tasteText.trim())
+                ].slice(0, 10);
+
                 // Save to ProfileContext
                 await saveUserProfile({
                     uid: user.uid,
+                    aiPromptHistory: updatedHistory,
                     preferences: {
                         mode: 'ai',
                         lastParsedConstraints: constraints,
-                        tasteText: tasteText
+                        tasteText: tasteText.trim()
                     }
                 });
 
@@ -401,7 +438,43 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                     </>
                 ) : (
                     <>
-                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 20 }]}>{"Describe what you're looking for"}</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 8 }}>
+                            <Text style={[styles.label, { color: theme.colors.text, marginBottom: 0 }]}>
+                                {"Describe what you're looking for"}
+                            </Text>
+                            {profile?.aiPromptHistory && profile.aiPromptHistory.length > 0 && (
+                                <TouchableOpacity 
+                                    onPress={() => setShowHistory(!showHistory)} 
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                >
+                                    <Ionicons name="time-outline" size={16} color={theme.colors.primary} />
+                                    <Text style={{ color: theme.colors.primary, fontSize: 14, fontWeight: '600' }}>
+                                        {showHistory ? 'Hide History' : 'History'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {showHistory && profile?.aiPromptHistory && profile.aiPromptHistory.length > 0 && (
+                            <View style={[styles.historyContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                                <Text style={[styles.historyTitle, { color: theme.colors.secondary }]}>Recent Prompts</Text>
+                                {profile.aiPromptHistory.map((prompt, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[styles.historyItem, index < profile.aiPromptHistory!.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 }]}
+                                        onPress={() => {
+                                            setTasteText(prompt);
+                                            setShowHistory(false);
+                                        }}
+                                    >
+                                        <Text style={{ color: theme.colors.text, fontSize: 14 }} numberOfLines={2}>
+                                            {prompt}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+
                         <TextInput
                             style={[
                                 styles.textArea,
@@ -650,5 +723,23 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         fontFamily: 'System',
         minHeight: 40,
+    },
+    historyContainer: {
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 12,
+        marginBottom: 16,
+        gap: 8,
+    },
+    historyTitle: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: 4,
+    },
+    historyItem: {
+        paddingVertical: 10,
+        paddingHorizontal: 4,
     },
 });

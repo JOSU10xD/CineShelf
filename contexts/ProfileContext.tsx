@@ -11,6 +11,7 @@ export interface UserProfile {
     avatarId: number | string;
     createdAt?: Timestamp | string;
     updatedAt?: Timestamp | string;
+    aiPromptHistory?: string[];
     preferences?: {
         mode: 'manual' | 'ai';
         manualGenres?: number[];
