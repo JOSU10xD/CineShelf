@@ -56,7 +56,14 @@ class TmdbService {
     }
 
     getGenreId(name: string): number | undefined {
-        return this.genres.get(name.toLowerCase());
+        let cleanName = name.toLowerCase().trim();
+        if (cleanName === 'anime' || cleanName === 'animated') {
+            cleanName = 'animation';
+        }
+        if (cleanName === 'sci-fi' || cleanName === 'scifi' || cleanName === 'science-fiction') {
+            cleanName = 'science fiction';
+        }
+        return this.genres.get(cleanName);
     }
 
     async discoverMovies(params: any) {

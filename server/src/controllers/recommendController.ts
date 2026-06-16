@@ -246,7 +246,8 @@ async function generateRecommendations(constraints: ParsedConstraints) {
     // 1. Semantic Match & Recommendations Flow (If AI suggested specific movie titles)
     if (constraints.suggestedTitles && constraints.suggestedTitles.length > 0) {
         console.log("AI suggested specific titles:", constraints.suggestedTitles);
-        const results: any[] = [];
+        const exactMatches: any[] = [];
+        const similarMovies: any[] = [];
         const seenIds = new Set<number>();
 
         for (const title of constraints.suggestedTitles) {
@@ -257,7 +258,7 @@ async function generateRecommendations(constraints: ParsedConstraints) {
                     const exactMatch = searchData.results[0];
                     if (!seenIds.has(exactMatch.id)) {
                         seenIds.add(exactMatch.id);
-                        results.push({
+                        exactMatches.push({
                             id: exactMatch.id,
                             title: exactMatch.title,
                             poster_path: exactMatch.poster_path,
@@ -269,11 +270,11 @@ async function generateRecommendations(constraints: ParsedConstraints) {
                     const similarData = await tmdbService.getSimilarMovies(exactMatch.id);
                     if (similarData && similarData.results && similarData.results.length > 0) {
                         // Limit to top 15 similar movies per title to avoid overwhelming
-                        const similarMovies = similarData.results.slice(0, 15);
-                        for (const sim of similarMovies) {
+                        const slice = similarData.results.slice(0, 15);
+                        for (const sim of slice) {
                             if (!seenIds.has(sim.id)) {
                                 seenIds.add(sim.id);
-                                results.push({
+                                similarMovies.push({
                                     id: sim.id,
                                     title: sim.title,
                                     poster_path: sim.poster_path,
@@ -288,9 +289,10 @@ async function generateRecommendations(constraints: ParsedConstraints) {
             }
         }
 
-        if (results.length > 0) {
-            console.log(`Semantic flow returned ${results.length} related movies.`);
-            return results; // Return directly, bypassing general discover
+        const combined = [...exactMatches, ...similarMovies];
+        if (combined.length > 0) {
+            console.log(`Semantic flow returned ${combined.length} related movies (Exact: ${exactMatches.length}, Similar: ${similarMovies.length}).`);
+            return combined; // Return directly, bypassing general discover
         }
     }
 

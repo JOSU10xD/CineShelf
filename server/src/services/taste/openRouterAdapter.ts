@@ -62,6 +62,7 @@ export class OpenRouterAdapter implements TasteProvider {
                                     "suggestedTitles": ["exact movie title 1", "exact movie title 2"]
                                 }
                                 Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
+                                Detect "anime" as genre "animation" and original language "ja".
                                 `
                             },
                             {
@@ -218,6 +219,15 @@ export class OpenRouterAdapter implements TasteProvider {
         if ((lower.includes('funny') || lower.includes('laugh') || lower.includes('humor')) && !genres.some(g => g.name === 'comedy')) genres.push({ name: 'comedy', confidence: 0.8 });
         // "cowboy" -> Western
         if ((lower.includes('cowboy') || lower.includes('western')) && !genres.some(g => g.name === 'western')) genres.push({ name: 'western', confidence: 0.8 });
+        // "anime" -> Animation genre & Japanese language
+        if (lower.includes('anime')) {
+            if (!genres.some(g => g.name === 'animation')) {
+                genres.push({ name: 'animation', confidence: 0.9 });
+            }
+            if (!languages.includes('ja')) {
+                languages.push('ja');
+            }
+        }
         // "happy ending" / "feel good" -> Comedy + Romance or Family
         if (lower.includes('happy ending') || lower.includes('feel good') || lower.includes('wholesome')) {
             if (!genres.some(g => g.name === 'comedy')) genres.push({ name: 'comedy', confidence: 0.6 });
