@@ -122,12 +122,14 @@ const MovieDetailsScreenComponent: React.FC<Props> = ({ movieId, mediaType = 'mo
       </Text>
     </View>
   ));
+  CastMember.displayName = 'CastMember';
 
   const GenreItem = memo(({ genre }: { genre: any }) => (
     <View style={[styles.genre, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <Text style={[styles.genreText, { color: theme.colors.primary }]}>{genre.name}</Text>
     </View>
   ));
+  GenreItem.displayName = 'GenreItem';
 
   if (loading) {
     return (

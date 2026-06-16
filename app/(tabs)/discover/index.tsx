@@ -30,6 +30,7 @@ const MovieTile = memo(({ item, onPress, theme }: { item: any, onPress: (item: a
     )}
   </TouchableOpacity>
 ));
+MovieTile.displayName = 'MovieTile';
 
 export default function HomeScreen() {
   const router = useRouter();

@@ -28,10 +28,10 @@ export class OpenRouterAdapter implements TasteProvider {
         }
 
         const models = [
-            process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free',
-            'meta-llama/llama-3.1-8b-instruct:free',
-            'qwen/qwen-2-7b-instruct:free',
-            'huggingfaceh4/zephyr-7b-beta:free'
+            process.env.OPENROUTER_MODEL || 'openrouter/free',
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'meta-llama/llama-3.2-3b-instruct:free',
+            'google/gemma-2-9b-it:free'
         ];
 
         let lastError: any = null;
@@ -94,7 +94,8 @@ export class OpenRouterAdapter implements TasteProvider {
                 try {
                     result = JSON.parse(content);
                 } catch (parseError) {
-                    console.log('Direct JSON parse failed, trying regex extraction...');
+                    console.log('Direct JSON parse failed. Content was:', content);
+                    console.log('trying regex extraction...');
                     const jsonMatch = content.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         try {
@@ -108,6 +109,32 @@ export class OpenRouterAdapter implements TasteProvider {
                 }
 
                 if (!result.yearRange) result.yearRange = { from: 1900, to: 2025 };
+
+                if (result.languages && Array.isArray(result.languages)) {
+                    const langMapping: Record<string, string> = {
+                        'malayalam': 'ml',
+                        'mallu': 'ml',
+                        'tamil': 'ta',
+                        'kollywood': 'ta',
+                        'hindi': 'hi',
+                        'bollywood': 'hi',
+                        'english': 'en',
+                        'hollywood': 'en',
+                        'telugu': 'te',
+                        'tollywood': 'te',
+                        'korean': 'ko',
+                        'japanese': 'ja',
+                        'spanish': 'es',
+                        'french': 'fr',
+                        'german': 'de',
+                        'italian': 'it',
+                        'chinese': 'zh'
+                    };
+                    result.languages = result.languages.map((l: string) => {
+                        const clean = l.toLowerCase().trim();
+                        return langMapping[clean] || clean;
+                    });
+                }
 
                 // Cache success
                 this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -183,11 +210,12 @@ export class OpenRouterAdapter implements TasteProvider {
             }
         }
 
-        // Special mappings
         // "sad" -> Drama
         if ((lower.includes('sad') || lower.includes('emotional') || lower.includes('tearjerker')) && !genres.some(g => g.name === 'drama')) genres.push({ name: 'drama', confidence: 0.8 });
         // "funny" -> Comedy
         if ((lower.includes('funny') || lower.includes('laugh') || lower.includes('humor')) && !genres.some(g => g.name === 'comedy')) genres.push({ name: 'comedy', confidence: 0.8 });
+        // "cowboy" -> Western
+        if ((lower.includes('cowboy') || lower.includes('western')) && !genres.some(g => g.name === 'western')) genres.push({ name: 'western', confidence: 0.8 });
         // "happy ending" / "feel good" -> Comedy + Romance or Family
         if (lower.includes('happy ending') || lower.includes('feel good') || lower.includes('wholesome')) {
             if (!genres.some(g => g.name === 'comedy')) genres.push({ name: 'comedy', confidence: 0.6 });

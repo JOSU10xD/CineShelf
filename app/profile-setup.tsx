@@ -277,7 +277,7 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <Text style={[styles.title, { color: theme.colors.primary }]}>Your Taste</Text>
                 <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>
-                    Help us recommend movies you'll love
+                    {"Help us recommend movies you'll love"}
                 </Text>
 
                 <View style={styles.toggleContainer}>
@@ -337,7 +337,7 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                     </>
                 ) : (
                     <>
-                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 20 }]}>Describe what you're looking for</Text>
+                        <Text style={[styles.label, { color: theme.colors.text, marginTop: 20 }]}>{"Describe what you're looking for"}</Text>
                         <TextInput
                             style={[
                                 styles.textArea,
