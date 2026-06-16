@@ -152,22 +152,24 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Discover] Focus Effect Triggered');
-      loadRecommendations();
+      console.log('[Discover] Focus Effect Triggered, current count:', recommendations.length);
+      if (recommendations.length === 0) {
+        loadRecommendations();
+      }
 
       return () => {
         // cleanup
       };
-    }, [loadRecommendations])
+    }, [loadRecommendations, recommendations])
   );
 
   // Automatically reload recommendations when the profile gets loaded or updated
   React.useEffect(() => {
-    if (profile) {
+    if (profile && recommendations.length === 0) {
       console.log('[Discover] Profile loaded/updated, reloading recommendations');
       loadRecommendations();
     }
-  }, [profile, loadRecommendations]);
+  }, [profile, loadRecommendations, recommendations]);
 
   const openFromHome = useCallback((item: any) => {
     router.push({

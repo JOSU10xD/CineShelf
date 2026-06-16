@@ -8,7 +8,8 @@ import { AppProvider } from '../contexts/AppContext';
 import { AuthProvider } from '../contexts/AuthContext';
 import { DrawerProvider } from '../contexts/DrawerContext';
 import { ProfileProvider } from '../contexts/ProfileContext';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
+import { ThemeProvider as NavigationProvider } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useUserProfile } from '../hooks/useUserProfile';
 
@@ -18,6 +19,7 @@ function RootLayoutNav() {
     const { profile, loading: profileLoading } = useUserProfile(user?.uid);
     const segments = useSegments();
     const router = useRouter();
+    const { theme } = useTheme();
 
     useEffect(() => {
         if (authLoading || profileLoading) return;
@@ -34,30 +36,45 @@ function RootLayoutNav() {
         }
     }, [user, profile, authLoading, profileLoading, segments, router]);
 
-    return (
-        <View style={styles.container}>
-            <Stack screenOptions={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                animationDuration: 350,
-                gestureEnabled: true,
-                gestureDirection: 'horizontal',
-            }}>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="auth" options={{ headerShown: false, animation: 'fade' }} />
-                <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
-                <Stack.Screen name="movie/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                <Stack.Screen name="settings" options={{ presentation: 'card', headerShown: false }} />
-                <Stack.Screen name="about" options={{ presentation: 'modal', headerShown: false }} />
-            </Stack>
+    const navTheme = {
+        dark: theme.dark,
+        colors: {
+            primary: theme.colors.primary,
+            background: theme.colors.background,
+            card: theme.colors.card,
+            text: theme.colors.text,
+            border: theme.colors.border,
+            notification: theme.colors.notification,
+        }
+    };
 
-            {!splashComplete && (
-                <AnimatedSplash 
-                    ready={!authLoading && !profileLoading} 
-                    onFinish={() => setSplashComplete(true)} 
-                />
-            )}
-        </View>
+    return (
+        <NavigationProvider value={navTheme}>
+            <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+                <Stack screenOptions={{
+                    headerShown: false,
+                    animation: 'slide_from_right',
+                    animationDuration: 350,
+                    gestureEnabled: true,
+                    gestureDirection: 'horizontal',
+                    contentStyle: { backgroundColor: theme.colors.background },
+                }}>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="auth" options={{ headerShown: false, animation: 'fade' }} />
+                    <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+                    <Stack.Screen name="movie/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                    <Stack.Screen name="settings" options={{ presentation: 'card', headerShown: false }} />
+                    <Stack.Screen name="about" options={{ presentation: 'modal', headerShown: false }} />
+                </Stack>
+
+                {!splashComplete && (
+                    <AnimatedSplash 
+                        ready={!authLoading && !profileLoading} 
+                        onFinish={() => setSplashComplete(true)} 
+                    />
+                )}
+            </View>
+        </NavigationProvider>
     );
 }
 

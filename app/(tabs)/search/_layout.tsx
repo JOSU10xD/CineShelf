@@ -1,12 +1,15 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 export default function SearchStackLayout() {
+  const { theme } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#0A0A0A' },
+        contentStyle: { backgroundColor: theme.colors.background },
         animation: 'slide_from_right',
         gestureEnabled: true,
         gestureDirection: 'horizontal',
