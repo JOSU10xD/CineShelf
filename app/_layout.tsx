@@ -9,7 +9,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { DrawerProvider } from '../contexts/DrawerContext';
 import { ProfileProvider } from '../contexts/ProfileContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
-import { ThemeProvider as NavigationProvider } from '@react-navigation/native';
+import { ThemeProvider as NavigationProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useUserProfile } from '../hooks/useUserProfile';
 
@@ -36,9 +36,12 @@ function RootLayoutNav() {
         }
     }, [user, profile, authLoading, profileLoading, segments, router]);
 
+    const baseTheme = theme.dark ? DarkTheme : DefaultTheme;
     const navTheme = {
+        ...baseTheme,
         dark: theme.dark,
         colors: {
+            ...baseTheme.colors,
             primary: theme.colors.primary,
             background: theme.colors.background,
             card: theme.colors.card,
