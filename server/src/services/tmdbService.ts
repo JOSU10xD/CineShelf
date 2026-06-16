@@ -81,6 +81,41 @@ class TmdbService {
             return { results: [] };
         }
     }
+    async searchMovie(query: string) {
+        try {
+            const response = await axios.get(`${TMDB_BASE_URL}/search/movie`, {
+                params: {
+                    api_key: this.apiKey,
+                    query: query,
+                    include_adult: false,
+                    language: 'en-US'
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`TMDb search error for query "${query}": ${error.message}`);
+            return { results: [] };
+        }
+    }
+
+    async getSimilarMovies(movieId: number | string) {
+        try {
+            const response = await axios.get(`${TMDB_BASE_URL}/movie/${movieId}/recommendations`, {
+                params: {
+                    api_key: this.apiKey,
+                    language: 'en-US',
+                    page: 1
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`TMDb getSimilarMovies error for movie ${movieId}: ${error.message}`);
+            return { results: [] };
+        }
+    }
+
     async healthCheck(): Promise<boolean> {
         try {
             await axios.get(`${TMDB_BASE_URL}/genre/movie/list`, {

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getFirestore, setDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     Alert,
     Image,
@@ -9,7 +9,10 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    Modal,
+    Animated,
+    Easing
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
@@ -50,6 +53,38 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
     const [parsedConstraints, setParsedConstraints] = useState<any>(null);
     const [parsing, setParsing] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [loadingMessage, setLoadingMessage] = useState('');
+
+    const rotation = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        let animation: Animated.CompositeAnimation | null = null;
+        if (generating) {
+            rotation.setValue(0);
+            animation = Animated.loop(
+                Animated.timing(rotation, {
+                    toValue: 1,
+                    duration: 2000,
+                    easing: Easing.linear,
+                    useNativeDriver: true,
+                })
+            );
+            animation.start();
+        } else {
+            rotation.setValue(0);
+        }
+        return () => {
+            if (animation) {
+                animation.stop();
+            }
+        };
+    }, [generating, rotation]);
+
+    const rotateInterpolate = rotation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg'],
+    });
 
     useEffect(() => {
         if (step === 'taste') {
@@ -117,7 +152,38 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
 
     const handleFinish = async () => {
         if (!user) return;
+
+        setProgress(0);
+        const messages = [
+            "🍿 Warming up the popcorn machine...",
+            "🎞️ Threading the 35mm projector...",
+            "🤖 Consulting the digital movie oracle...",
+            "🎭 Rehearsing the acceptance speech...",
+            "🎟️ Printing your virtual tickets...",
+            "🎬 Shouting 'Quiet on the set!'...",
+            "🦁 Waking up the MGM lion...",
+            "🚀 Traveling through the wormhole...",
+            "🕶️ Putting on the 3D glasses..."
+        ];
+        let messageIndex = 0;
+        setLoadingMessage(messages[0]);
+
         setGenerating(true);
+
+        const startTime = Date.now();
+        const duration = 5000; // 5 seconds to get to 95%
+        
+        const progressInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const percentage = Math.min(Math.floor((elapsed / duration) * 95), 95);
+            setProgress(percentage);
+        }, 100);
+
+        const messageInterval = setInterval(() => {
+            messageIndex = (messageIndex + 1) % messages.length;
+            setLoadingMessage(messages[messageIndex]);
+        }, 1200);
+
         try {
             const db = getFirestore();
             const prefsRef = doc(db, 'users', user.uid, 'prefs', 'main');
@@ -153,6 +219,8 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
             } else {
                 if (!tasteText.trim()) {
                     Alert.alert('Details Needed', 'Please describe what you want to watch.');
+                    clearInterval(progressInterval);
+                    clearInterval(messageInterval);
                     setGenerating(false);
                     return;
                 }
@@ -166,6 +234,8 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                     } catch (err) {
                         console.error(err);
                         Alert.alert('Error', 'Failed to interpret your request.');
+                        clearInterval(progressInterval);
+                        clearInterval(messageInterval);
                         setGenerating(false);
                         return;
                     }
@@ -194,8 +264,20 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                 // Pass constraints directly
                 await recommendationApi.recommend('ai', true, { lastParsedConstraints: constraints });
             }
+
+            // Success: fill up progress to 100% and show a completion message
+            clearInterval(progressInterval);
+            clearInterval(messageInterval);
+            setProgress(100);
+            setLoadingMessage("🍿 Ready! Enjoy the show!");
+            
+            // wait a brief moment for the user to see the 100% completion state
+            await new Promise(resolve => setTimeout(resolve, 800));
+
             router.replace('/(tabs)/discover' as any);
         } catch (error) {
+            clearInterval(progressInterval);
+            clearInterval(messageInterval);
             console.error('Finish error:', error);
             Alert.alert('Error', 'Failed to get recommendations');
         } finally {
@@ -370,11 +452,46 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                         {generating ? 'Finding Movies...' : 'Show Recommendations'}
                     </Text>
                 </TouchableOpacity>
-
+ 
                 <TouchableOpacity onPress={handleSkip} style={{ marginTop: 16, alignItems: 'center' }}>
                     <Text style={{ color: theme.colors.secondary }}>Skip for now</Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            <Modal
+                transparent
+                visible={generating}
+                animationType="fade"
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                        <View style={styles.progressContainer}>
+                            <View style={[styles.progressBackground, { borderColor: theme.colors.border }]} />
+                            <Animated.View
+                                style={[
+                                    styles.progressArc,
+                                    {
+                                        borderTopColor: theme.colors.primary,
+                                        borderRightColor: theme.colors.primary,
+                                        transform: [{ rotate: rotateInterpolate }],
+                                    },
+                                ]}
+                            />
+                            <View style={[styles.progressInner, { backgroundColor: theme.colors.card }]}>
+                                <Text style={[styles.progressText, { color: theme.colors.text }]}>
+                                    {progress}%
+                                </Text>
+                            </View>
+                        </View>
+                        <Text style={[styles.loadingTitle, { color: theme.colors.text }]}>
+                            Finding the Perfect Match...
+                        </Text>
+                        <Text style={[styles.loadingSubtitle, { color: theme.colors.secondary }]}>
+                            {loadingMessage}
+                        </Text>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -500,5 +617,75 @@ const styles = StyleSheet.create({
     previewTitle: {
         fontWeight: 'bold',
         marginBottom: 8,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '85%',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 8,
+    },
+    progressContainer: {
+        width: 140,
+        height: 140,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    progressBackground: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        borderWidth: 6,
+        position: 'absolute',
+        opacity: 0.15,
+    },
+    progressArc: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        borderWidth: 6,
+        borderColor: 'transparent',
+        position: 'absolute',
+    },
+    progressInner: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    progressText: {
+        fontSize: 28,
+        fontWeight: '800',
+        fontFamily: 'System',
+    },
+    loadingTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        marginBottom: 10,
+        textAlign: 'center',
+        fontFamily: 'System',
+    },
+    loadingSubtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+        paddingHorizontal: 16,
+        fontStyle: 'italic',
+        fontFamily: 'System',
+        minHeight: 40,
     },
 });

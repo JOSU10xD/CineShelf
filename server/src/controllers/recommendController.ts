@@ -243,7 +243,58 @@ export const getRecommendations = async (req: Request, res: Response) => {
 };
 
 async function generateRecommendations(constraints: ParsedConstraints) {
-    // Map constraints to TMDb discover params
+    // 1. Semantic Match & Recommendations Flow (If AI suggested specific movie titles)
+    if (constraints.suggestedTitles && constraints.suggestedTitles.length > 0) {
+        console.log("AI suggested specific titles:", constraints.suggestedTitles);
+        const results: any[] = [];
+        const seenIds = new Set<number>();
+
+        for (const title of constraints.suggestedTitles) {
+            try {
+                // A. Search for the exact movie
+                const searchData = await tmdbService.searchMovie(title);
+                if (searchData && searchData.results && searchData.results.length > 0) {
+                    const exactMatch = searchData.results[0];
+                    if (!seenIds.has(exactMatch.id)) {
+                        seenIds.add(exactMatch.id);
+                        results.push({
+                            id: exactMatch.id,
+                            title: exactMatch.title,
+                            poster_path: exactMatch.poster_path,
+                            reason: `Exact match for: "${title}"`
+                        });
+                    }
+
+                    // B. Get similar movies for this exact match
+                    const similarData = await tmdbService.getSimilarMovies(exactMatch.id);
+                    if (similarData && similarData.results && similarData.results.length > 0) {
+                        // Limit to top 15 similar movies per title to avoid overwhelming
+                        const similarMovies = similarData.results.slice(0, 15);
+                        for (const sim of similarMovies) {
+                            if (!seenIds.has(sim.id)) {
+                                seenIds.add(sim.id);
+                                results.push({
+                                    id: sim.id,
+                                    title: sim.title,
+                                    poster_path: sim.poster_path,
+                                    reason: `Similar to "${exactMatch.title}" (${constraints.explain})`
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`Error processing suggested title "${title}":`, err);
+            }
+        }
+
+        if (results.length > 0) {
+            console.log(`Semantic flow returned ${results.length} related movies.`);
+            return results; // Return directly, bypassing general discover
+        }
+    }
+
+    // 2. Standard Discover Fallback Flow
     const params: any = {
         'vote_count.gte': 5, // Lowered from 100 to allow niche results
     };

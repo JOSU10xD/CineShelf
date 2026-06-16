@@ -8,6 +8,7 @@ export interface ParsedConstraints {
     confidence: number;
     explain: string;
     randomize?: boolean;
+    suggestedTitles?: string[];
 }
 
 export interface TasteProvider {

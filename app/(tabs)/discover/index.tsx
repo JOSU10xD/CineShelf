@@ -152,15 +152,6 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // When screen comes into focus, if we have recommendations, maybe checking if they match current prefs?
-      // OR just checking if we need to reload. 
-      // For now, let's trigger a load if recommendations are empty OR if profile changed?
-      // Actually, just relying on useCallback dependency [profile] in loadRecommendations might be tricky with FocusEffect.
-
-      // Simple approach: trigger loadRecommendations() which checks cached data vs force.
-      // But we want to auto-refresh if prefs changed.
-      // Since loadRecommendations depends on [profile], if profile changed, the function changed.
-
       console.log('[Discover] Focus Effect Triggered');
       loadRecommendations();
 
@@ -169,6 +160,14 @@ export default function HomeScreen() {
       };
     }, [loadRecommendations])
   );
+
+  // Automatically reload recommendations when the profile gets loaded or updated
+  React.useEffect(() => {
+    if (profile) {
+      console.log('[Discover] Profile loaded/updated, reloading recommendations');
+      loadRecommendations();
+    }
+  }, [profile, loadRecommendations]);
 
   const openFromHome = useCallback((item: any) => {
     router.push({

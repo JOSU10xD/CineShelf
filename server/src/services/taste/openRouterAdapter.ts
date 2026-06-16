@@ -46,7 +46,8 @@ export class OpenRouterAdapter implements TasteProvider {
                         messages: [
                             {
                                 role: 'system',
-                                content: `You are a movie recommendation expert. Extract constraints from the user's taste text into JSON.
+                                 content: `You are a movie recommendation expert. Extract constraints from the user's taste text into JSON.
+                                If the user describes a specific plot, premise, or asks for recommendations similar to a specific film/idea, identify up to 5 actual movie titles that fit perfectly and list them in "suggestedTitles". If no specific film/premise is described, set "suggestedTitles" to [].
                                 Output JSON ONLY. No markdown, no "json" tags.
                                 Format:
                                 {
@@ -57,7 +58,8 @@ export class OpenRouterAdapter implements TasteProvider {
                                     "moods": ["mood"],
                                     "keywords": ["keyword"],
                                     "confidence": 0-1,
-                                    "explain": "reasoning"
+                                    "explain": "reasoning",
+                                    "suggestedTitles": ["exact movie title 1", "exact movie title 2"]
                                 }
                                 Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
                                 `
@@ -230,7 +232,8 @@ export class OpenRouterAdapter implements TasteProvider {
             moods: [],
             keywords: [],
             confidence: 0.5,
-            explain: "AI was busy, so we used keyword matching to find these."
+            explain: "AI was busy, so we used keyword matching to find these.",
+            suggestedTitles: []
         };
     }
 }
