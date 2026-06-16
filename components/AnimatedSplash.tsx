@@ -1,6 +1,8 @@
 import { Asset } from 'expo-asset';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Loader from './Loader';
+import CinemaLoadingInsights from './CinemaLoadingInsights';
 import Animated, {
     runOnJS,
     useAnimatedStyle,
@@ -95,6 +97,10 @@ export const AnimatedSplash = ({ ready, onFinish }: AnimatedSplashProps) => {
                     style={[styles.textLogo, textStyle]}
                     resizeMode="contain"
                 />
+                <Animated.View style={[styles.loaderContainer, textStyle]}>
+                    <Loader />
+                    <CinemaLoadingInsights />
+                </Animated.View>
             </View>
         </Animated.View>
     );
@@ -119,5 +125,10 @@ const styles = StyleSheet.create({
     textLogo: {
         width: 180,
         height: 45,
+    },
+    loaderContainer: {
+        marginTop: 20,
+        alignItems: 'center',
+        width: '100%',
     },
 });

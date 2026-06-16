@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getFirestore, setDoc } from 'firebase/firestore';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     Image,
@@ -10,15 +10,24 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Modal,
-    Animated,
-    Easing
+    Modal
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { recommendationApi } from '../services/recommendationApi';
 import { tmdbService } from '../services/tmdb';
+import Loader from '../components/Loader';
+import CinemaLoadingInsights, { Insight } from '../components/CinemaLoadingInsights';
+
+const SETUP_INSIGHTS: Insight[] = [
+    { id: '1', category: 'Taste Analysis', body: 'Consulting the digital movie oracle to parse your taste...' },
+    { id: '2', category: 'Popcorn Prep', body: 'Warming up the popcorn machine and melting the butter...' },
+    { id: '3', category: 'Projector Setup', body: 'Threading the 35mm projector with cinema treasures...' },
+    { id: '4', category: 'Ticket Booth', body: 'Printing your custom virtual movie tickets...' },
+    { id: '5', category: 'Showtime', body: 'Waking up the MGM lion to start the recommendations show...' },
+    { id: '6', category: 'Curator Search', body: 'Filtering titles matching your aesthetic constraints...' }
+];
 
 // Avatar assets mapping
 const AVATARS = [
@@ -54,37 +63,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
     const [parsing, setParsing] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [loadingMessage, setLoadingMessage] = useState('');
-
-    const rotation = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        let animation: Animated.CompositeAnimation | null = null;
-        if (generating) {
-            rotation.setValue(0);
-            animation = Animated.loop(
-                Animated.timing(rotation, {
-                    toValue: 1,
-                    duration: 2000,
-                    easing: Easing.linear,
-                    useNativeDriver: true,
-                })
-            );
-            animation.start();
-        } else {
-            rotation.setValue(0);
-        }
-        return () => {
-            if (animation) {
-                animation.stop();
-            }
-        };
-    }, [generating, rotation]);
-
-    const rotateInterpolate = rotation.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
 
     useEffect(() => {
         if (step === 'taste') {
@@ -154,20 +132,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
         if (!user) return;
 
         setProgress(0);
-        const messages = [
-            "🍿 Warming up the popcorn machine...",
-            "🎞️ Threading the 35mm projector...",
-            "🤖 Consulting the digital movie oracle...",
-            "🎭 Rehearsing the acceptance speech...",
-            "🎟️ Printing your virtual tickets...",
-            "🎬 Shouting 'Quiet on the set!'...",
-            "🦁 Waking up the MGM lion...",
-            "🚀 Traveling through the wormhole...",
-            "🕶️ Putting on the 3D glasses..."
-        ];
-        let messageIndex = 0;
-        setLoadingMessage(messages[0]);
-
         setGenerating(true);
 
         const startTime = Date.now();
@@ -178,11 +142,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
             const percentage = Math.min(Math.floor((elapsed / duration) * 95), 95);
             setProgress(percentage);
         }, 100);
-
-        const messageInterval = setInterval(() => {
-            messageIndex = (messageIndex + 1) % messages.length;
-            setLoadingMessage(messages[messageIndex]);
-        }, 1200);
 
         try {
             const db = getFirestore();
@@ -220,7 +179,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                 if (!tasteText.trim()) {
                     Alert.alert('Details Needed', 'Please describe what you want to watch.');
                     clearInterval(progressInterval);
-                    clearInterval(messageInterval);
                     setGenerating(false);
                     return;
                 }
@@ -235,7 +193,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                         console.error(err);
                         Alert.alert('Error', 'Failed to interpret your request.');
                         clearInterval(progressInterval);
-                        clearInterval(messageInterval);
                         setGenerating(false);
                         return;
                     }
@@ -265,11 +222,9 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                 await recommendationApi.recommend('ai', true, { lastParsedConstraints: constraints });
             }
 
-            // Success: fill up progress to 100% and show a completion message
+            // Success: fill up progress to 100%
             clearInterval(progressInterval);
-            clearInterval(messageInterval);
             setProgress(100);
-            setLoadingMessage("🍿 Ready! Enjoy the show!");
             
             // wait a brief moment for the user to see the 100% completion state
             await new Promise(resolve => setTimeout(resolve, 800));
@@ -277,7 +232,6 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
             router.replace('/(tabs)/discover' as any);
         } catch (error) {
             clearInterval(progressInterval);
-            clearInterval(messageInterval);
             console.error('Finish error:', error);
             Alert.alert('Error', 'Failed to get recommendations');
         } finally {
@@ -465,30 +419,11 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                        <View style={styles.progressContainer}>
-                            <View style={[styles.progressBackground, { borderColor: theme.colors.border }]} />
-                            <Animated.View
-                                style={[
-                                    styles.progressArc,
-                                    {
-                                        borderTopColor: theme.colors.primary,
-                                        borderRightColor: theme.colors.primary,
-                                        transform: [{ rotate: rotateInterpolate }],
-                                    },
-                                ]}
-                            />
-                            <View style={[styles.progressInner, { backgroundColor: theme.colors.card }]}>
-                                <Text style={[styles.progressText, { color: theme.colors.text }]}>
-                                    {progress}%
-                                </Text>
-                            </View>
-                        </View>
-                        <Text style={[styles.loadingTitle, { color: theme.colors.text }]}>
-                            Finding the Perfect Match...
+                        <Loader />
+                        <Text style={[styles.progressText, { color: theme.colors.text, marginTop: 16 }]}>
+                            {progress}%
                         </Text>
-                        <Text style={[styles.loadingSubtitle, { color: theme.colors.secondary }]}>
-                            {loadingMessage}
-                        </Text>
+                        <CinemaLoadingInsights insights={SETUP_INSIGHTS} />
                     </View>
                 </View>
             </Modal>
