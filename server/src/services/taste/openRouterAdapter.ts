@@ -46,8 +46,7 @@ export class OpenRouterAdapter implements TasteProvider {
                         messages: [
                             {
                                 role: 'system',
-                                 content: `You are a movie recommendation expert. Extract constraints from the user's taste text into JSON.
-                                If the user describes a specific plot, premise, or asks for recommendations similar to a specific film/idea, identify up to 5 actual movie titles that fit perfectly and list them in "suggestedTitles". If no specific film/premise is described, set "suggestedTitles" to [].
+                                 content: `You are a movie and TV recommendation expert. Extract constraints from the user's taste text into JSON.
                                 Output JSON ONLY. No markdown, no "json" tags.
                                 Format:
                                 {
@@ -59,11 +58,16 @@ export class OpenRouterAdapter implements TasteProvider {
                                     "keywords": ["keyword"],
                                     "confidence": 0-1,
                                     "explain": "reasoning",
-                                    "suggestedTitles": ["exact movie title 1", "exact movie title 2"]
+                                    "mediaType": "movie" | "tv" | "both",
+                                    "exactMatchTitle": {"title": "exact movie/series title", "type": "movie" | "tv"} or null,
+                                    "suggestedTitles": [{"title": "movie/series title", "type": "movie" | "tv"}]
                                 }
-                                Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
-                                Detect "anime" as genre "animation" and original language "ja".
-                                `
+                                Rules:
+                                1. "exactMatchTitle": Set this ONLY if the user describes a specific plot, synopsis, specific scene, pointers, or a specific movie/series they want to find. If the prompt is general (e.g. asking for "action movies", "90s comedies", "top anime"), set it to null.
+                                2. "mediaType": Classify if they want "movie", "tv" (series/shows), or "both" (like for "anime" or mixed lists).
+                                3. "suggestedTitles": Provide up to 5 matching movie/series titles.
+                                4. Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
+                                5. Detect "anime" as genre "animation" and original language "ja".`
                             },
                             {
                                 role: 'user',
@@ -234,6 +238,14 @@ export class OpenRouterAdapter implements TasteProvider {
             if (!genres.some(g => g.name === 'family')) genres.push({ name: 'family', confidence: 0.6 });
         }
 
+        let mediaType: 'movie' | 'tv' | 'both' = 'movie';
+        if (lower.includes('series') || lower.includes('tv') || lower.includes('show') || lower.includes('episode')) {
+            mediaType = 'tv';
+        }
+        if (lower.includes('anime')) {
+            mediaType = 'both';
+        }
+
         return {
             input: text,
             languages,
@@ -243,7 +255,9 @@ export class OpenRouterAdapter implements TasteProvider {
             keywords: [],
             confidence: 0.5,
             explain: "AI was busy, so we used keyword matching to find these.",
-            suggestedTitles: []
+            suggestedTitles: [],
+            exactMatchTitle: null,
+            mediaType
         };
     }
 }

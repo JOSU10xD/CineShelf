@@ -8,7 +8,9 @@ export interface ParsedConstraints {
     confidence: number;
     explain: string;
     randomize?: boolean;
-    suggestedTitles?: string[];
+    suggestedTitles?: { title: string; type: 'movie' | 'tv' }[];
+    exactMatchTitle?: { title: string; type: 'movie' | 'tv' } | null;
+    mediaType?: 'movie' | 'tv' | 'both';
 }
 
 export interface TasteProvider {

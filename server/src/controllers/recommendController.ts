@@ -123,7 +123,15 @@ export const recommend = async (req: Request, res: Response) => {
                     // But here forceRefresh is false. 
                     // However, we can shuffle the cached items before returning!
                     const items = data?.items || [];
-                    const shuffled = items.sort(() => 0.5 - Math.random());
+                    let shuffled = [];
+                    const hasExact = constraints.exactMatchTitle || (items[0] && items[0].reason && items[0].reason.startsWith('Exact match'));
+                    if (hasExact && items.length > 0) {
+                        const exact = items[0];
+                        const similar = items.slice(1).sort(() => 0.5 - Math.random());
+                        shuffled = [exact, ...similar];
+                    } else {
+                        shuffled = items.sort(() => 0.5 - Math.random());
+                    }
 
                     res.json({ ...data, items: shuffled });
                     return;
@@ -243,66 +251,156 @@ export const getRecommendations = async (req: Request, res: Response) => {
 };
 
 async function generateRecommendations(constraints: ParsedConstraints) {
-    // 1. Semantic Match & Recommendations Flow (If AI suggested specific movie titles)
+    // 1. EXACT MATCH LOCK FLOW
+    if (constraints.exactMatchTitle && constraints.exactMatchTitle.title) {
+        const exact = constraints.exactMatchTitle;
+        console.log(`Processing exact match request: "${exact.title}" (${exact.type})`);
+        
+        try {
+            let exactItem: any = null;
+            let similarResults: any[] = [];
+            
+            // Search for exact movie/show
+            if (exact.type === 'tv') {
+                const searchData = await tmdbService.searchTv(exact.title);
+                if (searchData?.results?.length > 0) {
+                    exactItem = searchData.results[0];
+                    exactItem.media_type = 'tv';
+                }
+            } else {
+                const searchData = await tmdbService.searchMovie(exact.title);
+                if (searchData?.results?.length > 0) {
+                    exactItem = searchData.results[0];
+                    exactItem.media_type = 'movie';
+                }
+            }
+            
+            if (exactItem) {
+                // Fetch recommendations/similar items
+                let similarData;
+                if (exactItem.media_type === 'tv') {
+                    similarData = await tmdbService.getSimilarTv(exactItem.id);
+                } else {
+                    similarData = await tmdbService.getSimilarMovies(exactItem.id);
+                }
+                
+                if (similarData?.results?.length > 0) {
+                    similarResults = similarData.results.map((m: any) => ({
+                        id: m.id,
+                        title: m.title || m.name,
+                        poster_path: m.poster_path,
+                        media_type: exactItem.media_type,
+                        reason: `Similar to "${exactItem.title || exactItem.name}" (${constraints.explain})`
+                    }));
+                }
+                
+                // Shuffle similar results on refresh (randomize = true)
+                if (constraints.randomize) {
+                    similarResults = similarResults.sort(() => 0.5 - Math.random());
+                }
+                
+                const finalResults = [
+                    {
+                        id: exactItem.id,
+                        title: exactItem.title || exactItem.name,
+                        poster_path: exactItem.poster_path,
+                        media_type: exactItem.media_type,
+                        reason: `Exact match for: "${exact.title}"`
+                    },
+                    ...similarResults
+                ];
+                
+                console.log(`Exact match flow complete. Returning exact match plus ${similarResults.length} similar items.`);
+                return finalResults;
+            }
+        } catch (err) {
+            console.error(`Error in exact match flow for "${exact.title}":`, err);
+        }
+    }
+
+    // 2. AI SUGGESTED TITLES FLOW (When there is no single exact match, but AI suggested multiple titles)
     if (constraints.suggestedTitles && constraints.suggestedTitles.length > 0) {
-        console.log("AI suggested specific titles:", constraints.suggestedTitles);
+        console.log("Processing AI suggested list:", constraints.suggestedTitles);
         const exactMatches: any[] = [];
         const similarMovies: any[] = [];
         const seenIds = new Set<number>();
 
-        for (const title of constraints.suggestedTitles) {
+        for (const item of constraints.suggestedTitles) {
             try {
-                // A. Search for the exact movie
-                const searchData = await tmdbService.searchMovie(title);
-                if (searchData && searchData.results && searchData.results.length > 0) {
-                    const exactMatch = searchData.results[0];
-                    if (!seenIds.has(exactMatch.id)) {
-                        seenIds.add(exactMatch.id);
-                        exactMatches.push({
-                            id: exactMatch.id,
-                            title: exactMatch.title,
-                            poster_path: exactMatch.poster_path,
-                            reason: `Exact match for: "${title}"`
-                        });
+                let matchedItem: any = null;
+                if (item.type === 'tv') {
+                    const searchData = await tmdbService.searchTv(item.title);
+                    if (searchData?.results?.length > 0) {
+                        matchedItem = searchData.results[0];
+                        matchedItem.media_type = 'tv';
+                    }
+                } else {
+                    const searchData = await tmdbService.searchMovie(item.title);
+                    if (searchData?.results?.length > 0) {
+                        matchedItem = searchData.results[0];
+                        matchedItem.media_type = 'movie';
+                    }
+                }
+
+                if (matchedItem && !seenIds.has(matchedItem.id)) {
+                    seenIds.add(matchedItem.id);
+                    exactMatches.push({
+                        id: matchedItem.id,
+                        title: matchedItem.title || matchedItem.name,
+                        poster_path: matchedItem.poster_path,
+                        media_type: matchedItem.media_type,
+                        reason: `AI Recommendation: "${item.title}"`
+                    });
+
+                    // Fetch recommendations for this seed title
+                    let similarData;
+                    if (matchedItem.media_type === 'tv') {
+                        similarData = await tmdbService.getSimilarTv(matchedItem.id);
+                    } else {
+                        similarData = await tmdbService.getSimilarMovies(matchedItem.id);
                     }
 
-                    // B. Get similar movies for this exact match
-                    const similarData = await tmdbService.getSimilarMovies(exactMatch.id);
-                    if (similarData && similarData.results && similarData.results.length > 0) {
-                        // Limit to top 15 similar movies per title to avoid overwhelming
+                    if (similarData?.results?.length > 0) {
                         const slice = similarData.results.slice(0, 15);
                         for (const sim of slice) {
                             if (!seenIds.has(sim.id)) {
                                 seenIds.add(sim.id);
                                 similarMovies.push({
                                     id: sim.id,
-                                    title: sim.title,
+                                    title: sim.title || sim.name,
                                     poster_path: sim.poster_path,
-                                    reason: `Similar to "${exactMatch.title}" (${constraints.explain})`
+                                    media_type: matchedItem.media_type,
+                                    reason: `Similar to "${matchedItem.title || matchedItem.name}" (${constraints.explain})`
                                 });
                             }
                         }
                     }
                 }
             } catch (err) {
-                console.error(`Error processing suggested title "${title}":`, err);
+                console.error(`Error processing suggested title "${item.title}":`, err);
             }
         }
 
-        const combined = [...exactMatches, ...similarMovies];
+        let combined = [...exactMatches, ...similarMovies];
+        if (constraints.randomize) {
+            combined = combined.sort(() => 0.5 - Math.random());
+        }
+
         if (combined.length > 0) {
-            console.log(`Semantic flow returned ${combined.length} related movies (Exact: ${exactMatches.length}, Similar: ${similarMovies.length}).`);
-            return combined; // Return directly, bypassing general discover
+            console.log(`Suggested titles flow returned ${combined.length} items.`);
+            return combined;
         }
     }
 
-    // 2. Standard Discover Fallback Flow
-    const params: any = {
-        'vote_count.gte': 5, // Lowered from 100 to allow niche results
+    // 3. STANDARD DISCOVER FLOW (Rule-based / Category Discovery)
+    const mediaTypeToDiscover = constraints.mediaType || 'movie';
+    console.log(`Standard Discover Flow: mediaType = ${mediaTypeToDiscover}`);
+
+    const discoverParams: any = {
+        'vote_count.gte': 5,
     };
 
     if (constraints.genres && constraints.genres.length > 0) {
-        // If we have IDs (manual) use them, else map names
         const genreIds = constraints.genres.map(g => {
             // @ts-ignore
             if (g.id) return g.id;
@@ -310,64 +408,72 @@ async function generateRecommendations(constraints: ParsedConstraints) {
         }).filter(id => id !== undefined);
 
         if (genreIds.length > 0) {
-            params.with_genres = genreIds.join(','); // AND logic? or OR? pipe for OR
+            discoverParams.with_genres = genreIds.join(',');
         }
     }
 
     if (constraints.yearRange) {
-        params['primary_release_date.gte'] = `${constraints.yearRange.from}-01-01`;
-        params['primary_release_date.lte'] = `${constraints.yearRange.to}-12-31`;
-    }
-
-    if (constraints.languages && constraints.languages.length > 0) {
-        // TMDb allows one language usually or with_original_language
-        // We'll pick the first one for now
-        params.with_original_language = constraints.languages[0];
-    }
-
-    // Fetch
-    if (constraints.randomize) {
-        // Increase range to 20 to get more variety, especially for broader queries
-        params.page = Math.floor(Math.random() * 20) + 1;
-    }
-
-    console.log("TMDB Params:", JSON.stringify(params, null, 2));
-    let data = await tmdbService.discoverMovies(params);
-
-    // Smart Randomization Logic: If random deep page (e.g. 15) returns nothing, check total_pages
-    if (params.page && params.page > 1) {
-        const totalPages = data.total_pages || 0;
-
-        // If we overshot (results empty but total_pages might be > 0, or we just want to ensure validity)
-        // Actually, we only need to retry if results are empty.
-        if ((!data.results || data.results.length === 0) && totalPages > 0) {
-            // Pick a new random page within the actual limit (capped at 50 for performance)
-            const maxPage = Math.min(totalPages, 50);
-            const newPage = Math.floor(Math.random() * maxPage) + 1;
-            console.log(`Page ${params.page} yielded 0 results. Total available: ${totalPages}. Retrying with Page ${newPage}...`);
-
-            params.page = newPage;
-            data = await tmdbService.discoverMovies(params);
-        } else if ((!data.results || data.results.length === 0) && totalPages === 0) {
-            // Genuine empty result (no movies at all for this query) - let fallback handling take over below
-            console.log(`Page ${params.page} returned 0 results and total_pages is 0. Moving to constraint relaxation.`);
+        if (mediaTypeToDiscover === 'tv') {
+            discoverParams['first_air_date.gte'] = `${constraints.yearRange.from}-01-01`;
+            discoverParams['first_air_date.lte'] = `${constraints.yearRange.to}-12-31`;
+        } else {
+            discoverParams['primary_release_date.gte'] = `${constraints.yearRange.from}-01-01`;
+            discoverParams['primary_release_date.lte'] = `${constraints.yearRange.to}-12-31`;
         }
     }
 
-    console.log(`TMDB Results: ${data.results?.length} items`);
-    if (data.results?.length > 0) {
-        console.log("First Result:", data.results[0].title);
+    if (constraints.languages && constraints.languages.length > 0) {
+        discoverParams.with_original_language = constraints.languages[0];
     }
 
-    // Shuffle results to ensure freshness even if page is same
-    const resultsArray = data.results || [];
-    const shuffled = resultsArray.sort(() => 0.5 - Math.random());
+    if (constraints.randomize) {
+        discoverParams.page = Math.floor(Math.random() * 10) + 1;
+    }
 
-    // Map to client format
-    return shuffled.map((m: any) => ({
-        id: m.id,
-        title: m.title,
-        poster_path: m.poster_path,
-        reason: constraints.explain // Simple reason for now
-    }));
+    let moviesResults: any[] = [];
+    let tvResults: any[] = [];
+
+    // Query Movies
+    if (mediaTypeToDiscover === 'movie' || mediaTypeToDiscover === 'both') {
+        try {
+            const data = await tmdbService.discoverMovies(discoverParams);
+            if (data?.results?.length > 0) {
+                moviesResults = data.results.map((m: any) => ({
+                    id: m.id,
+                    title: m.title,
+                    poster_path: m.poster_path,
+                    media_type: 'movie',
+                    reason: constraints.explain
+                }));
+            }
+        } catch (err) {
+            console.error("Discover movies error:", err);
+        }
+    }
+
+    // Query TV Series
+    if (mediaTypeToDiscover === 'tv' || mediaTypeToDiscover === 'both') {
+        try {
+            const data = await tmdbService.discoverTv(discoverParams);
+            if (data?.results?.length > 0) {
+                tvResults = data.results.map((m: any) => ({
+                    id: m.id,
+                    title: m.name,
+                    poster_path: m.poster_path,
+                    media_type: 'tv',
+                    reason: constraints.explain
+                }));
+            }
+        } catch (err) {
+            console.error("Discover TV error:", err);
+        }
+    }
+
+    let combinedResults = [...moviesResults, ...tvResults];
+
+    if (constraints.randomize) {
+        combinedResults = combinedResults.sort(() => 0.5 - Math.random());
+    }
+
+    return combinedResults;
 }

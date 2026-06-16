@@ -123,6 +123,60 @@ class TmdbService {
         }
     }
 
+    async discoverTv(params: any) {
+        try {
+            const response = await axios.get(`${TMDB_BASE_URL}/discover/tv`, {
+                params: {
+                    api_key: this.apiKey,
+                    include_adult: false,
+                    language: 'en-US',
+                    sort_by: 'popularity.desc',
+                    ...params,
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`TMDb discover TV error: ${error.message}`);
+            return { results: [] };
+        }
+    }
+
+    async searchTv(query: string) {
+        try {
+            const response = await axios.get(`${TMDB_BASE_URL}/search/tv`, {
+                params: {
+                    api_key: this.apiKey,
+                    query: query,
+                    include_adult: false,
+                    language: 'en-US'
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`TMDb search TV error for query "${query}": ${error.message}`);
+            return { results: [] };
+        }
+    }
+
+    async getSimilarTv(tvId: number | string) {
+        try {
+            const response = await axios.get(`${TMDB_BASE_URL}/tv/${tvId}/recommendations`, {
+                params: {
+                    api_key: this.apiKey,
+                    language: 'en-US',
+                    page: 1
+                },
+                timeout: 10000
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`TMDb getSimilarTv error for TV show ${tvId}: ${error.message}`);
+            return { results: [] };
+        }
+    }
+
     async healthCheck(): Promise<boolean> {
         try {
             await axios.get(`${TMDB_BASE_URL}/genre/movie/list`, {

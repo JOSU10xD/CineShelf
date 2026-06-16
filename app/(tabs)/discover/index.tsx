@@ -172,7 +172,7 @@ export default function HomeScreen() {
   const openFromHome = useCallback((item: any) => {
     router.push({
       pathname: `/movie/${item.id}`,
-      params: { type: 'movie' } // Recommendations are currently movies
+      params: { type: item.media_type || 'movie' }
     } as any);
   }, [router]);
 

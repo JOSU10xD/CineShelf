@@ -121,7 +121,7 @@ export default function WatchlistScreen() {
       if (isDragging.value) return;
       router.push({
         pathname: `/movie/${movie.movieId}`,
-        params: { type: 'movie' }, // Defaulting to movie since media_type might not be saved, or we need to save it.
+        params: { type: movie.media_type || 'movie' },
       } as any);
     },
     [router, isDragging]
