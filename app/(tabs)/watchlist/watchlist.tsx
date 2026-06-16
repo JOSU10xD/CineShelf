@@ -46,7 +46,7 @@ const ITEM_HEIGHT = CARD_HEIGHT + MARGIN_BOTTOM;
 const AUTO_SCROLL_ZONE = 150; // Distance from top/bottom edge to trigger auto-scroll
 const AUTO_SCROLL_SPEED = 3; // Pixels per frame (moderate speed)
 const LONG_PRESS_DELAY = 200;
-const SPRING_CONFIG = { damping: 20, stiffness: 150 };
+const SPRING_CONFIG = { damping: 24, stiffness: 220, mass: 0.8 };
 
 // Helper to generate a stable ID
 const getItemId = (item: WatchlistItem) => `${item.movieId}-${item.addedAt}`;
@@ -58,6 +58,7 @@ export default function WatchlistScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const [dragMode, setDragMode] = useState(false);
+  const [dragActive, setDragActive] = useState(false); // Disable ScrollView scroll when dragging is active
 
   // Provide safe fallbacks for optional theme color keys (TS types may not include warning/error)
   const themeColorsAny = (theme.colors as any) ?? {};
@@ -133,11 +134,15 @@ export default function WatchlistScreen() {
       const indexB = finalPositions[getItemId(b)];
       return indexA - indexB;
     });
-    setLocalItems(newOrder);
-    reorderWatchlist(newOrder);
+    // Delay state update to let Reanimated finish visual spring animation smoothly on UI thread
+    setTimeout(() => {
+      setLocalItems(newOrder);
+      reorderWatchlist(newOrder);
+    }, 300);
   }, [localItems, reorderWatchlist]);
 
   const triggerHapticStart = useCallback(() => {
+    setDragActive(true);
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
@@ -154,6 +159,7 @@ export default function WatchlistScreen() {
   }, []);
 
   const triggerHapticEnd = useCallback(() => {
+    setDragActive(false);
     try {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
@@ -239,7 +245,7 @@ export default function WatchlistScreen() {
           { height: Math.max(localItems.length * ITEM_HEIGHT + 120, Dimensions.get('window').height) }
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!isDragging.value}
+        scrollEnabled={!dragActive}
       >
         {/* Visual Placeholder */}
         <Animated.View style={placeholderStyle} />

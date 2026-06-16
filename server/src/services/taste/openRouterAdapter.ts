@@ -28,65 +28,90 @@ export class OpenRouterAdapter implements TasteProvider {
         }
 
         const models = [
-            process.env.OPENROUTER_MODEL || 'openrouter/free',
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'meta-llama/llama-3.2-3b-instruct:free',
-            'google/gemma-2-9b-it:free'
+            process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+            'google/gemma-4-31b-it:free',
+            'openrouter/free',
+            'meta-llama/llama-3.2-3b-instruct:free'
         ];
 
         let lastError: any = null;
 
         for (const model of models) {
-            try {
-                console.log(`Using model: ${model}`);
-                const response = await axios.post(
-                    this.url,
-                    {
-                        model: model,
-                        messages: [
-                            {
-                                role: 'system',
-                                 content: `You are a movie and TV recommendation expert. Extract constraints from the user's taste text into JSON.
-                                Output JSON ONLY. No markdown, no "json" tags.
-                                Format:
-                                {
-                                    "input": "original text",
-                                    "languages": ["iso-639-1 code"],
-                                    "genres": [{"name": "genre name", "confidence": 0-1}],
-                                    "yearRange": {"from": YYYY, "to": YYYY},
-                                    "moods": ["mood"],
-                                    "keywords": ["keyword"],
-                                    "confidence": 0-1,
-                                    "explain": "reasoning",
-                                    "mediaType": "movie" | "tv" | "both",
-                                    "exactMatchTitle": {"title": "exact movie/series title", "type": "movie" | "tv"} or null,
-                                    "suggestedTitles": [{"title": "movie/series title", "type": "movie" | "tv"}]
-                                }
-                                Rules:
-                                1. "exactMatchTitle": Set this ONLY if the user describes a specific plot, synopsis, specific scene, pointers, or a specific movie/series they want to find. If the prompt is general (e.g. asking for "action movies", "90s comedies", "top anime"), set it to null.
-                                2. "mediaType": Classify if they want "movie", "tv" (series/shows), or "both" (like for "anime" or mixed lists).
-                                3. "suggestedTitles": Provide up to 5 matching movie/series titles.
-                                4. Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
-                                5. Detect "anime" as genre "animation" and original language "ja".`
-                            },
-                            {
-                                role: 'user',
-                                content: text
-                            }
-                        ],
-                        temperature: 0.1
-                    },
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${this.apiKey}`,
-                            'Content-Type': 'application/json',
-                            'HTTP-Referer': 'https://cineshelf.app',
-                            'X-Title': 'CineShelf'
-                        },
-                        timeout: 10000
-                    }
-                );
+            let response;
+            let attempts = 0;
+            const maxAttempts = 2;
 
+            while (attempts < maxAttempts) {
+                try {
+                    console.log(`Using model: ${model} (Attempt ${attempts + 1}/${maxAttempts})`);
+                    response = await axios.post(
+                        this.url,
+                        {
+                            model: model,
+                            messages: [
+                                {
+                                    role: 'system',
+                                     content: `You are a movie and TV recommendation expert. Extract constraints from the user's taste text into JSON.
+                                    Output JSON ONLY. No markdown, no "json" tags.
+                                    Format:
+                                    {
+                                        "input": "original text",
+                                        "languages": ["iso-639-1 code"],
+                                        "genres": [{"name": "genre name", "confidence": 0-1}],
+                                        "yearRange": {"from": YYYY, "to": YYYY},
+                                        "moods": ["mood"],
+                                        "keywords": ["keyword"],
+                                        "confidence": 0-1,
+                                        "explain": "reasoning",
+                                        "mediaType": "movie" | "tv" | "both",
+                                        "exactMatchTitle": {"title": "exact movie/series title", "type": "movie" | "tv"} or null,
+                                        "suggestedTitles": [{"title": "movie/series title", "type": "movie" | "tv"}]
+                                    }
+                                    Rules:
+                                    1. "exactMatchTitle": Set this ONLY if the user describes a specific plot, synopsis, specific scene, pointers, or a specific movie/series they want to find. If the prompt is general (e.g. asking for "action movies", "90s comedies", "top anime"), set it to null.
+                                    2. "mediaType": Classify if they want "movie", "tv" (series/shows), or "both" (like for "anime" or mixed lists).
+                                    3. "suggestedTitles": Provide up to 5 matching movie/series titles.
+                                    4. Detect "Mallu" or "Malayalam" as "ml". "Kollywood" or "Tamil" as "ta".
+                                    5. Detect "anime" as genre "animation" and original language "ja".`
+                                },
+                                {
+                                    role: 'user',
+                                    content: text
+                                }
+                            ],
+                            temperature: 0.1
+                        },
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.apiKey}`,
+                                'Content-Type': 'application/json',
+                                'HTTP-Referer': 'https://cineshelf.app',
+                                'X-Title': 'CineShelf'
+                            },
+                            timeout: 10000
+                        }
+                    );
+                    break; // Success, exit retry loop
+                } catch (error: any) {
+                    attempts++;
+                    const isRateLimit = error.response?.status === 429;
+                    if (isRateLimit && attempts < maxAttempts) {
+                        console.warn(`429 Rate Limit hit for model ${model}. Retrying in 1.5s...`);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    } else {
+                        // Fail this model and fallback to the next model in the outer loop
+                        lastError = error;
+                        break;
+                    }
+                }
+            }
+
+            if (!response) {
+                console.warn(`Model ${model} failed to respond, switching to fallback...`);
+                continue;
+            }
+
+            try {
                 let content = response.data.choices[0].message.content;
                 // Clean code blocks
                 if (content) {
@@ -148,7 +173,7 @@ export class OpenRouterAdapter implements TasteProvider {
                 return result;
 
             } catch (error: any) {
-                console.warn(`Model ${model} failed (${error.message}), switching to fallback...`);
+                console.warn(`Model ${model} processing failed (${error.message}), switching to fallback...`);
                 lastError = error;
                 // Continue to next model
             }
@@ -166,7 +191,7 @@ export class OpenRouterAdapter implements TasteProvider {
         if (lower.includes('mallu') || lower.includes('malayalam') || lower.includes('kerala')) languages.push('ml');
         if (lower.includes('tamil') || lower.includes('kollywood')) languages.push('ta');
         if (lower.includes('hindi') || lower.includes('bollywood')) languages.push('hi');
-        if (lower.includes('english') || lower.includes('hollywood')) languages.push('en');
+        if ((lower.includes('english') || lower.includes('hollywood')) && !lower.includes('non english') && !lower.includes('non-english')) languages.push('en');
         if (lower.includes('korean') || lower.includes('kdrama')) languages.push('ko');
         if (lower.includes('japanese') || lower.includes('japan') || lower.includes('anime')) languages.push('ja');
         if (lower.includes('italian') || lower.includes('italy')) languages.push('it');
@@ -181,7 +206,7 @@ export class OpenRouterAdapter implements TasteProvider {
         let from = 1970; // Default to somewhat modern
         let to = 2025;
 
-        if (lower.includes('classic') || lower.includes('old') || lower.includes('vintage')) {
+        if (lower.includes('classic movie') || lower.includes('old movie') || lower.includes('classic film') || lower.includes('old film') || lower.includes('vintage movie') || lower.includes('classics')) {
             from = 1950;
             to = 1999;
         } else if (lower.includes('90s')) {
