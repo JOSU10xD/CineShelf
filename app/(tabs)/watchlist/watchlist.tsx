@@ -28,6 +28,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  useAnimatedReaction,
 } from 'react-native-reanimated';
 
 import { ImageWithFallback } from '../../../components/ImageWithFallback';
@@ -71,12 +72,21 @@ export default function WatchlistScreen() {
     setLocalItems(watchlist);
   }, [watchlist]);
 
+  // Pre-calculate initial positions to prevent layout jumps/flashes on first render
+  const initialPositions = React.useMemo(() => {
+    const pos: Record<string, number> = {};
+    watchlist.forEach((item, index) => {
+      pos[getItemId(item)] = index;
+    });
+    return pos;
+  }, [watchlist]);
+
   // Shared values
   const scrollY = useSharedValue(0);
   const scrollViewRef = useAnimatedRef<Animated.ScrollView>();
-  const positions = useSharedValue<Record<string, number>>({});
-  const containerHeight = useSharedValue(0);
-  const contentHeight = useSharedValue(0);
+  const positions = useSharedValue<Record<string, number>>(initialPositions);
+  const containerHeight = useSharedValue(Dimensions.get('window').height);
+  const contentHeight = useSharedValue(watchlist.length * ITEM_HEIGHT);
   const isDragging = useSharedValue(false);
   const shouldAutoScroll = useSharedValue(false);
   const autoScrollDirection = useSharedValue(0); // -1 for up, 1 for down, 0 for none
@@ -234,6 +244,9 @@ export default function WatchlistScreen() {
         ref={scrollViewRef}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
+        onLayout={(event) => {
+          containerHeight.value = event.nativeEvent.layout.height;
+        }}
         contentContainerStyle={[
           styles.scrollContent,
           { height: Math.max(localItems.length * ITEM_HEIGHT + 120, Dimensions.get('window').height) }
@@ -323,28 +336,32 @@ function SortableItem({
   const dragTranslationY = useSharedValue(0);
   const startTop = useSharedValue(0);
   const lastSwapIndex = useSharedValue(-1);
-  const autoScrollAccumulator = useSharedValue(0); // Tracks auto-scroll movement
+  const initialScrollY = useSharedValue(0);
 
   // Derived top position
   const top = useDerivedValue(() => {
     if (isDragging.value) {
-      // During drag, position = initial position + manual drag + auto-scroll compensation
-      return startTop.value + dragTranslationY.value + autoScrollAccumulator.value;
+      // During drag, position = initial position + manual drag + scroll difference
+      return startTop.value + dragTranslationY.value + (scrollY.value - initialScrollY.value);
     }
     const index = positions.value[id];
     if (typeof index !== 'number') return 0;
     return withSpring(index * ITEM_HEIGHT, SPRING_CONFIG);
   }, [positions, id]);
 
-  // Frame callback to update dragged card position during auto-scroll
-  useFrameCallback(() => {
-    if (isDragging.value && shouldAutoScroll.value && autoScrollDirection.value !== 0) {
-      // Move the dragged card in the opposite direction of scroll
-      // This makes it appear to move through the list
-      autoScrollAccumulator.value += autoScrollDirection.value * AUTO_SCROLL_SPEED;
+  // React to changes in the absolute position (both drag translation and scroll movement)
+  useAnimatedReaction(
+    () => {
+      if (!isDragging.value) return null;
+      return {
+        currentAbsoluteY: startTop.value + dragTranslationY.value + (scrollY.value - initialScrollY.value),
+        scrollY: scrollY.value
+      };
+    },
+    (data) => {
+      if (data === null) return;
+      const { currentAbsoluteY, scrollY: currentScrollY } = data;
 
-      // Calculate the current absolute position
-      const currentAbsoluteY = startTop.value + dragTranslationY.value + autoScrollAccumulator.value;
       const centerOffset = currentAbsoluteY + CARD_HEIGHT / 2;
       const newIndex = Math.floor(centerOffset / ITEM_HEIGHT);
       const clampedIndex = Math.max(0, Math.min(itemsCount - 1, newIndex));
@@ -384,87 +401,8 @@ function SortableItem({
         }
       }
 
-      // Check if we've reached the end
-      if (clampedIndex === 0 && autoScrollDirection.value === -1) {
-        // Reached top
-        shouldAutoScroll.value = false;
-        autoScrollDirection.value = 0;
-      } else if (clampedIndex === itemsCount - 1 && autoScrollDirection.value === 1) {
-        // Reached bottom
-        shouldAutoScroll.value = false;
-        autoScrollDirection.value = 0;
-      }
-    }
-  });
-
-  const panGesture = Gesture.Pan()
-    .enabled(dragMode)
-    .activateAfterLongPress(LONG_PRESS_DELAY)
-    .onStart(() => {
-      const currentPos = positions.value[id];
-      if (typeof currentPos !== 'number') return;
-
-      isDragging.value = true;
-      globalIsDragging.value = true;
-      zIndex.value = 100;
-      scale.value = withSpring(1.05, SPRING_CONFIG);
-
-      startTop.value = currentPos * ITEM_HEIGHT;
-      dragTranslationY.value = 0;
-      autoScrollAccumulator.value = 0;
-      activeDropIndex.value = currentPos;
-      lastSwapIndex.value = currentPos;
-
-      runOnJS(onHapticStart)();
-    })
-    .onUpdate((event) => {
-      if (!isDragging.value) return;
-
-      dragTranslationY.value = event.translationY;
-
-      // Calculate current position including auto-scroll offset
-      const currentAbsoluteY = startTop.value + event.translationY + autoScrollAccumulator.value;
-      const centerOffset = currentAbsoluteY + CARD_HEIGHT / 2;
-      const newIndex = Math.floor(centerOffset / ITEM_HEIGHT);
-      const clampedIndex = Math.max(0, Math.min(itemsCount - 1, newIndex));
-
-      // Update visual placeholder
-      activeDropIndex.value = clampedIndex;
-
-      const oldIndex = positions.value[id];
-
-      if (clampedIndex !== oldIndex) {
-        const newPositions = { ...positions.value };
-
-        for (const key in newPositions) {
-          const currentIndex = newPositions[key];
-
-          if (key === id) {
-            newPositions[key] = clampedIndex;
-            continue;
-          }
-
-          if (oldIndex < clampedIndex) {
-            if (currentIndex > oldIndex && currentIndex <= clampedIndex) {
-              newPositions[key] = currentIndex - 1;
-            }
-          } else {
-            if (currentIndex >= clampedIndex && currentIndex < oldIndex) {
-              newPositions[key] = currentIndex + 1;
-            }
-          }
-        }
-
-        positions.value = newPositions;
-
-        if (clampedIndex !== lastSwapIndex.value) {
-          runOnJS(onHapticMove)();
-          lastSwapIndex.value = clampedIndex;
-        }
-      }
-
-      // Auto-scroll logic based on screen position
-      const screenY = currentAbsoluteY - scrollY.value;
+      // Auto-scroll logic based on screen position of the card
+      const screenY = currentAbsoluteY - currentScrollY;
 
       if (screenY < AUTO_SCROLL_ZONE && clampedIndex > 0) {
         // Near top - scroll up
@@ -479,6 +417,32 @@ function SortableItem({
         shouldAutoScroll.value = false;
         autoScrollDirection.value = 0;
       }
+    }
+  );
+
+  const panGesture = Gesture.Pan()
+    .enabled(dragMode)
+    .activeOffsetY([-5, 5]) // Grab instantly on small vertical movements
+    .onStart(() => {
+      const currentPos = positions.value[id];
+      if (typeof currentPos !== 'number') return;
+
+      isDragging.value = true;
+      globalIsDragging.value = true;
+      zIndex.value = 100;
+      scale.value = withSpring(1.05, SPRING_CONFIG);
+
+      startTop.value = currentPos * ITEM_HEIGHT;
+      dragTranslationY.value = 0;
+      initialScrollY.value = scrollY.value;
+      activeDropIndex.value = currentPos;
+      lastSwapIndex.value = currentPos;
+
+      runOnJS(onHapticStart)();
+    })
+    .onUpdate((event) => {
+      if (!isDragging.value) return;
+      dragTranslationY.value = event.translationY;
     })
     .onFinalize(() => {
       if (!isDragging.value) return;
@@ -491,7 +455,6 @@ function SortableItem({
       zIndex.value = 0;
       scale.value = withSpring(1, SPRING_CONFIG);
       dragTranslationY.value = 0;
-      autoScrollAccumulator.value = 0;
       lastSwapIndex.value = -1;
 
       runOnJS(onHapticEnd)();

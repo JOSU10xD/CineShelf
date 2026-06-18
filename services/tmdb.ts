@@ -2,8 +2,8 @@
 import axios from 'axios';
 import { TMDBMovie, TMDBSearchResult } from '../types/tmdb';
 
-const API_KEY = '8aac68f105946f2a197ae70264028efe';
-const ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI4YWFjNjhmMTA1OTQ2ZjJhMTk3YWU3MDI2NDAyOGVmZSIsIm5iZiI6MTc2MjU3NzY2MS40ODcsInN1YiI6IjY5MGVjY2ZkYjUwMDRmMmQ1ZWEwYmVjNyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.z5fXgCREF3pq3oU7Q7aKDQRuVf3cO7-NZnDSYB9Pslo';
+const API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY || '8aac68f105946f2a197ae70264028efe';
+const ACCESS_TOKEN = process.env.EXPO_PUBLIC_TMDB_ACCESS_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI4YWFjNjhmMTA1OTQ2ZjJhMTk3YWU3MDI2NDAyOGVmZSIsIm5iZiI6MTc2MjU3NzY2MS40ODcsInN1YiI6IjY5MGVjY2ZkYjUwMDRmMmQ1ZWEwYmVjNyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.z5fXgCREF3pq3oU7Q7aKDQRuVf3cO7-NZnDSYB9Pslo';
 const BASE_URL = 'https://api.themoviedb.org/3';
 
 const api = axios.create({

@@ -53,4 +53,3 @@ expo-env.d.ts
 google-services(1).json
 google-services.json
 GoogleService-Info.plist
-services/firebase.js

@@ -15,6 +15,8 @@ interface AppContextType {
   };
   updateSearchState: (updates: Partial<AppContextType['searchState']>) => void;
   loading: boolean;
+  recommendations: any[];
+  setRecommendations: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -40,6 +42,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     results: [],
     selectedMovie: null
   });
+  const [recommendations, setRecommendations] = useState<any[]>([]);
 
   const addToWatchlist = useCallback((movie: TMDBSearchResult) => {
     // Map TMDBSearchResult to the format expected by addMovieToWatchlist
@@ -74,7 +77,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       reorderWatchlist,
       searchState,
       updateSearchState,
-      loading
+      loading,
+      recommendations,
+      setRecommendations
     }}>
       {children}
     </AppContext.Provider>

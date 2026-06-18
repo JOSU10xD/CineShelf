@@ -1,9 +1,23 @@
 import { Request, Response } from 'express';
+import { auth } from '../services/firebaseService';
 import { classifierService } from '../services/classifier';
 import { tmdbDiscoverService } from '../services/tmdbDiscover';
 
 export const classifyAndRecommend = async (req: Request, res: Response) => {
     try {
+        const token = req.headers.authorization?.split('Bearer ')[1];
+        if (!token) {
+            res.status(401).json({ error: 'Unauthorized', details: 'Token is required' });
+            return;
+        }
+
+        try {
+            await auth.verifyIdToken(token);
+        } catch (e) {
+            res.status(401).json({ error: 'Unauthorized', details: 'Invalid or expired token' });
+            return;
+        }
+
         const { title, overview, release_date, user_text, page, manual_genres, randomize } = req.body;
 
         // 1. Classify

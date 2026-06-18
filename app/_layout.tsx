@@ -29,9 +29,9 @@ function RootLayoutNav() {
 
         if (!user && !inAuthGroup) {
             router.replace('/auth' as any);
-        } else if (user && !profile && !inProfileSetup) {
+        } else if (user && (!profile || !profile.preferences) && !inProfileSetup) {
             router.replace('/profile-setup' as any);
-        } else if (user && profile && inAuthGroup) {
+        } else if (user && profile && profile.preferences && inAuthGroup) {
             router.replace('/(tabs)/discover' as any);
         }
     }, [user, profile, authLoading, profileLoading, segments, router]);

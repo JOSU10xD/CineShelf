@@ -34,12 +34,11 @@ MovieTile.displayName = 'MovieTile';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { watchlist } = useApp();
+  const { watchlist, recommendations, setRecommendations } = useApp();
 
   const { theme } = useTheme();
   const { profile } = useProfile();
-  const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(recommendations.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +106,7 @@ export default function HomeScreen() {
 
           if (mode === 'manual') {
             prefs = {
+              manualGenres: profile.preferences.manualGenres || [],
               manualMoods: profile.preferences.manualMoods || []
             };
           } else {

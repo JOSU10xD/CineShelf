@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { useUserProfile } from '../hooks/useUserProfile';
+import { useApp } from '../contexts/AppContext';
 import { recommendationApi } from '../services/recommendationApi';
 import { tmdbService } from '../services/tmdb';
 import Loader from '../components/Loader';
@@ -40,10 +41,32 @@ const AVATARS = [
 
 const MOODS = ['Uplifting', 'Melancholic', 'Nostalgic', 'Action-packed', 'Romantic', 'Dark', 'Thought-provoking', 'Relaxing'];
 
+const STATIC_GENRES = [
+    { id: 28, name: 'Action' },
+    { id: 12, name: 'Adventure' },
+    { id: 16, name: 'Animation' },
+    { id: 35, name: 'Comedy' },
+    { id: 80, name: 'Crime' },
+    { id: 99, name: 'Documentary' },
+    { id: 18, name: 'Drama' },
+    { id: 10751, name: 'Family' },
+    { id: 14, name: 'Fantasy' },
+    { id: 36, name: 'History' },
+    { id: 27, name: 'Horror' },
+    { id: 10402, name: 'Music' },
+    { id: 9648, name: 'Mystery' },
+    { id: 10749, name: 'Romance' },
+    { id: 878, name: 'Science Fiction' },
+    { id: 53, name: 'Thriller' },
+    { id: 10752, name: 'War' },
+    { id: 37, name: 'Western' }
+];
+
 export default function ProfileSetupScreen({ initialStep, initialMode }: { initialStep?: 'profile' | 'taste', initialMode?: 'manual' | 'ai' }) {
     const { user } = useAuth();
     const { profile, saveUserProfile } = useUserProfile(user?.uid);
     const { theme } = useTheme();
+    const { setRecommendations } = useApp();
     const router = useRouter();
 
     const params = useLocalSearchParams();
@@ -56,7 +79,7 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
 
     // Taste State
     const [tasteMode, setTasteMode] = useState<'manual' | 'ai'>(initialMode || 'manual');
-    const [genres, setGenres] = useState<{ id: number; name: string }[]>([]);
+    const [genres, setGenres] = useState<{ id: number; name: string }[]>(STATIC_GENRES);
     const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
     const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
     const [tasteText, setTasteText] = useState('');
@@ -66,10 +89,13 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
     const [progress, setProgress] = useState(0);
     const [showHistory, setShowHistory] = useState(false);
 
+    // Track if initial profile values have been prefilled
+    const [isPrefilled, setIsPrefilled] = useState(false);
+
     // Prefill states when profile context loads
     useEffect(() => {
-        if (profile) {
-            if (profile.username && !username) {
+        if (profile && !isPrefilled) {
+            if (profile.username) {
                 setUsername(profile.username);
             }
             if (profile.avatarId) {
@@ -79,21 +105,22 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                 if (profile.preferences.mode) {
                     setTasteMode(profile.preferences.mode);
                 }
-                if (profile.preferences.tasteText && !tasteText) {
+                if (profile.preferences.tasteText) {
                     setTasteText(profile.preferences.tasteText);
                 }
-                if (profile.preferences.manualGenres && selectedGenres.length === 0) {
+                if (profile.preferences.manualGenres) {
                     setSelectedGenres(profile.preferences.manualGenres);
                 }
-                if (profile.preferences.manualMoods && selectedMoods.length === 0) {
+                if (profile.preferences.manualMoods) {
                     setSelectedMoods(profile.preferences.manualMoods);
                 }
-                if (profile.preferences.lastParsedConstraints && !parsedConstraints) {
+                if (profile.preferences.lastParsedConstraints) {
                     setParsedConstraints(profile.preferences.lastParsedConstraints);
                 }
             }
+            setIsPrefilled(true);
         }
-    }, [profile, username, tasteText, selectedGenres.length, selectedMoods.length, parsedConstraints]);
+    }, [profile, isPrefilled]);
 
     useEffect(() => {
         if (step === 'taste') {
@@ -242,9 +269,9 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                     return;
                 }
 
-                // Parse first
+                // Parse first if no constraints, or if the current prompt does not match the prompt used for constraints
                 let constraints = parsedConstraints;
-                if (!constraints) {
+                if (!constraints || !constraints.input || constraints.input.toLowerCase().trim() !== tasteText.toLowerCase().trim()) {
                     try {
                         constraints = await recommendationApi.interpretTaste(tasteText);
                         setParsedConstraints(constraints);
@@ -287,6 +314,9 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                 await recommendationApi.recommend('ai', true, { lastParsedConstraints: constraints });
             }
 
+            // Clear cached recommendations in AppContext so the Discover tab is forced to re-fetch on enter
+            setRecommendations([]);
+
             // Success: fill up progress to 100%
             clearInterval(progressInterval);
             setProgress(100);
@@ -304,7 +334,22 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
         }
     };
 
-    const handleSkip = () => {
+    const handleSkip = async () => {
+        if (user) {
+            try {
+                // Save empty/default preferences to mark setup as complete
+                await saveUserProfile({
+                    uid: user.uid,
+                    preferences: {
+                        mode: 'manual',
+                        manualGenres: [],
+                        manualMoods: []
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to save skip preferences:', error);
+            }
+        }
         router.replace('/(tabs)/discover' as any);
     };
 
@@ -464,6 +509,7 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                                         style={[styles.historyItem, index < profile.aiPromptHistory!.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 }]}
                                         onPress={() => {
                                             setTasteText(prompt);
+                                            setParsedConstraints(null);
                                             setShowHistory(false);
                                         }}
                                     >
@@ -485,7 +531,10 @@ export default function ProfileSetupScreen({ initialStep, initialMode }: { initi
                                 }
                             ]}
                             value={tasteText}
-                            onChangeText={setTasteText}
+                            onChangeText={(text) => {
+                                setTasteText(text);
+                                setParsedConstraints(null);
+                            }}
                             placeholder="e.g., 80s sci-fi with synthwave vibes, or sad romantic movies"
                             placeholderTextColor={theme.colors.secondary}
                             multiline

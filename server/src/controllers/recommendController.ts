@@ -403,15 +403,7 @@ async function generateRecommendations(constraints: ParsedConstraints) {
                     }));
                 }
                 
-                // Enforce original language filtering on similar items
-                similarResults = filterByLanguage(similarResults);
-                
-                // Shuffle similar results on refresh (randomize = true)
-                if (constraints.randomize) {
-                    similarResults = similarResults.sort(() => 0.5 - Math.random());
-                }
-                
-                let finalResults = [
+                let coreMatches = [
                     {
                         id: exactItem.id,
                         title: exactItem.title || exactItem.name,
@@ -419,21 +411,32 @@ async function generateRecommendations(constraints: ParsedConstraints) {
                         media_type: exactItem.media_type,
                         original_language: exactItem.original_language,
                         reason: `Exact match for: "${exact.title}"`
-                    },
-                    ...similarResults
+                    }
                 ];
 
-                // Backfill if we have fewer than 15 results
-                if (finalResults.length < 15) {
-                    similarResults.forEach(m => seenIds.add(m.id));
-                    const discoverResults = await runDiscover(constraints, !!constraints.randomize);
-                    for (const item of discoverResults) {
-                        if (!seenIds.has(item.id)) {
-                            seenIds.add(item.id);
-                            finalResults.push(item);
-                        }
+                let candidates = filterByLanguage(similarResults);
+                const discoverResults = await runDiscover(constraints, !!constraints.randomize);
+                candidates = [...candidates, ...discoverResults];
+
+                let uniqueCandidates: any[] = [];
+                const seenCandidateIds = new Set<number>();
+                seenCandidateIds.add(exactItem.id);
+
+                for (const item of candidates) {
+                    if (!seenCandidateIds.has(item.id)) {
+                        seenCandidateIds.add(item.id);
+                        uniqueCandidates.push(item);
                     }
                 }
+
+                if (constraints.randomize) {
+                    uniqueCandidates = uniqueCandidates.sort(() => 0.5 - Math.random());
+                }
+
+                const remainingSlots = 20 - coreMatches.length;
+                const selectedCandidates = uniqueCandidates.slice(0, remainingSlots);
+
+                let finalResults = [...coreMatches, ...selectedCandidates];
                 
                 console.log(`Exact match flow complete. Returning exact match plus ${finalResults.length - 1} items.`);
                 return finalResults;
@@ -517,30 +520,38 @@ async function generateRecommendations(constraints: ParsedConstraints) {
             }
         }
 
-        let combined = [...exactMatches, ...similarMovies];
-
-        // Filter out unrelated languages from suggestions and similar items
-        combined = filterByLanguage(combined);
-
+        let coreMatches = filterByLanguage(exactMatches);
         if (constraints.randomize) {
-            combined = combined.sort(() => 0.5 - Math.random());
+            coreMatches = coreMatches.sort(() => 0.5 - Math.random());
         }
 
-        // Backfill with standard discover if results are sparse
-        if (combined.length < 15) {
-            console.log(`Suggested titles returned only ${combined.length} items. Backfilling with standard discover.`);
-            const discoverResults = await runDiscover(constraints, !!constraints.randomize);
-            for (const item of discoverResults) {
-                if (!seenIds.has(item.id)) {
-                    seenIds.add(item.id);
-                    combined.push(item);
-                }
+        let candidates = filterByLanguage(similarMovies);
+        const discoverResults = await runDiscover(constraints, !!constraints.randomize);
+        candidates = [...candidates, ...discoverResults];
+
+        const coreIds = new Set(coreMatches.map(m => m.id));
+        let uniqueCandidates: any[] = [];
+        const seenCandidateIds = new Set<number>();
+
+        for (const item of candidates) {
+            if (!coreIds.has(item.id) && !seenCandidateIds.has(item.id)) {
+                seenCandidateIds.add(item.id);
+                uniqueCandidates.push(item);
             }
         }
 
-        if (combined.length > 0) {
-            console.log(`Suggested titles flow returned ${combined.length} items.`);
-            return combined;
+        if (constraints.randomize) {
+            uniqueCandidates = uniqueCandidates.sort(() => 0.5 - Math.random());
+        }
+
+        const remainingSlots = 20 - coreMatches.length;
+        const selectedCandidates = uniqueCandidates.slice(0, remainingSlots);
+
+        let finalResults = [...coreMatches, ...selectedCandidates];
+
+        if (finalResults.length > 0) {
+            console.log(`Suggested titles flow returned ${finalResults.length} items (Core: ${coreMatches.length}, Candidates: ${selectedCandidates.length}).`);
+            return finalResults;
         }
     }
 
